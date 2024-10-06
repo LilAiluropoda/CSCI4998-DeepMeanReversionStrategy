@@ -3,14 +3,41 @@ import math
 from typing import List
 
 def round_precision(value: float, decimal_places: int) -> float:
+    """
+    Round a float value to a specified number of decimal places.
+    
+    Args:
+    value (float): The value to be rounded.
+    decimal_places (int): The number of decimal places to round to.
+    
+    Returns:
+    float: The rounded value.
+    """
     return round(value, decimal_places)
 
 def read_csv_file(fname: str) -> List[List[str]]:
+    """
+    Read a CSV file and return its contents as a list of lists.
+    
+    Args:
+    fname (str): The filename of the CSV file to read.
+    
+    Returns:
+    List[List[str]]: A list of lists containing the CSV data.
+    """
     with open(fname, 'r') as file:
         csv_reader = csv.reader(file, delimiter=';')
         return list(csv_reader)
 
 def main():
+    """
+    Main function to execute the trading strategy and calculate performance metrics.
+    
+    This function reads stock data from a CSV file, applies a trading strategy based on
+    Simple Moving Averages (SMA) and genetic algorithm parameters, and calculates various
+    performance metrics including total return, annualized return, transaction statistics,
+    and comparison with a Buy-and-Hold strategy.
+    """
     fname = "resources2/output.csv"
     data = read_csv_file(fname)
 
