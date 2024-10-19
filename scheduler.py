@@ -6,7 +6,7 @@ from phase2 import phase_process as phase2_process
 from phase3 import phase_process as phase3_process
 from phase4 import phase_process as phase4_process
 from phase5 import phase_process as phase5_process
-from GA import GA
+from GA import PDGA
 
 class Scheduler:
     CREATE_TEST_FILE = 0
@@ -22,7 +22,7 @@ class Scheduler:
     @staticmethod
     def run_ga():
         print("Running Genetic Algorithm")
-        GA.main()
+        PDGA.main()
 
     @staticmethod
     def main():
