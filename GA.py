@@ -1,4 +1,5 @@
 import random
+import math
 import os
 import csv
 from typing import List, Optional
@@ -336,28 +337,146 @@ class GA:
                 return new_filename
             index += 1
 
+    # @staticmethod
+    # def main() -> None:
+        # """Main method to run the Genetic Algorithm."""
+        # output_filename = GA.get_unique_filename("resources2/GATableListTraining.txt")
+        
+        # with open(output_filename, "w") as output_file:
+        #     while GA.counter < 50:
+        #         GA.counter += 1
+        #         my_pop = Population(GA.population_count, True)
+
+        #         generation_count = 0
+        #         my_pop.print_population()
+
+        #         builder: List[str] = []
+
+        #         while my_pop.get_fittest().get_fitness() * 0.7 > FitnessCalc.get_avg_fitness():
+        #             generation_count += 1
+        #             fittest = my_pop.get_fittest()
+        #             print(f"GA Generation: {generation_count} Fittest: {fittest.get_fitness()} Fittest Chromosome: {fittest}")
+        #             print(f"FitnessCalc.get_avg_fitness(): {FitnessCalc.get_avg_fitness()}")
+        #             my_pop = Algorithm.evolve_population(my_pop)
+        #             # my_pop.print_population()
+
+        #         print("Solution found!")
+        #         print(f"GA Generation: {generation_count}")
+        #         print("Genes:")
+        #         my_pop.get_fittest().print_chromosome()
+        #         print("--------------------------------")
+        #         FitnessCalc.set_fitness_total(0)
+
+        #         builder.append(my_pop.get_fittest().string_builder())
+        #         builder.append(GA.hold_gene_generator())
+        #         builder.append(GA.hold_gene_generator(True))
+
+        #         # Write the current iteration's output to the file
+        #         output_file.writelines(builder)
+        #         output_file.flush()  # Ensure the data is written to the file
+
+        # print(f"Output written to: {output_filename}")
+        
+class PDGA(GA):
+    """Class for running the Primal-Dual Genetic Algorithm."""
+
+    def __init__(self, population_size: int = 300, crossover_rate: float = 0.7, mutation_rate: float = 0.001):
+        super().__init__()
+        self.population_size = population_size
+        self.crossover_rate = crossover_rate
+        self.mutation_rate = mutation_rate
+
+    @staticmethod
+    def primal_dual_mapping(chromosome: Chromosome) -> Chromosome:
+        """
+        Create a dual chromosome by flipping all bits of the primal chromosome.
+
+        Args:
+            chromosome (Chromosome): The primal chromosome.
+
+        Returns:
+            Chromosome: The dual chromosome.
+        """
+        dual = Chromosome()
+        for i in range(chromosome.size()):
+            dual.set_gene(i, 1 - chromosome.get_gene(i))
+        return dual
+
+    def select_for_dual_evaluation(self, population: Population, num_select: int) -> List[Chromosome]:
+        """
+        Select chromosomes for dual evaluation based on their fitness.
+
+        Args:
+            population (Population): The current population.
+            num_select (int): Number of chromosomes to select.
+
+        Returns:
+            List[Chromosome]: Selected chromosomes for dual evaluation.
+        """
+        sorted_chromosomes = sorted(population.chromosomes, key=lambda c: c.get_fitness())
+        return sorted_chromosomes[:num_select]
+
+    def adaptive_dual_selection_size(self, generation: int, population_size: int) -> int:
+        """
+        Adaptively determine the number of chromosomes for dual evaluation.
+
+        Args:
+            generation (int): Current generation number.
+            population_size (int): Size of the population.
+
+        Returns:
+            int: Number of chromosomes to select for dual evaluation.
+        """
+        return max(1, int(population_size * math.exp(-0.05 * generation)))
+
+    def evolve_population(self, pop: Population) -> Population:
+        """
+        Evolve a population using the PDGA approach.
+
+        Args:
+            pop (Population): The population to evolve.
+
+        Returns:
+            Population: The evolved population.
+        """
+        # Call evolve_population from Algorithm, not GA
+        new_population = Algorithm.evolve_population(pop)
+        
+        # Perform dual evaluation
+        num_dual_eval = self.adaptive_dual_selection_size(self.counter, pop.size())
+        selected_for_dual = self.select_for_dual_evaluation(new_population, num_dual_eval)
+        
+        for chromosome in selected_for_dual:
+            dual_chromosome = self.primal_dual_mapping(chromosome)
+            if dual_chromosome.get_fitness() > chromosome.get_fitness():
+                # Replace the primal chromosome with its superior dual
+                index = new_population.chromosomes.index(chromosome)
+                new_population.save_chromosome(index, dual_chromosome)
+
+        return new_population
+
     @staticmethod
     def main() -> None:
-        """Main method to run the Genetic Algorithm."""
-        output_filename = GA.get_unique_filename("resources2/GATableListTraining.txt")
+        """Main method to run the Primal-Dual Genetic Algorithm."""
+        pdga = PDGA()
+        output_filename = PDGA.get_unique_filename("resources2/GATableListTraining.txt")
         
         with open(output_filename, "w") as output_file:
-            while GA.counter < 50:
-                GA.counter += 1
-                my_pop = Population(GA.population_count, True)
+            while pdga.counter < 50:
+                pdga.counter += 1
+                my_pop = Population(pdga.population_size, True)
 
                 generation_count = 0
                 my_pop.print_population()
 
                 builder: List[str] = []
 
-                while my_pop.get_fittest().get_fitness() * 0.7 > FitnessCalc.get_avg_fitness():
+                while my_pop.get_fittest().get_fitness()*0.7 > FitnessCalc.get_avg_fitness():
                     generation_count += 1
                     fittest = my_pop.get_fittest()
                     print(f"Generation: {generation_count} Fittest: {fittest.get_fitness()} Fittest Chromosome: {fittest}")
                     print(f"FitnessCalc.get_avg_fitness(): {FitnessCalc.get_avg_fitness()}")
-                    my_pop = Algorithm.evolve_population(my_pop)
-                    # my_pop.print_population()
+                    my_pop = pdga.evolve_population(my_pop)
 
                 print("Solution found!")
                 print(f"Generation: {generation_count}")
@@ -367,10 +486,9 @@ class GA:
                 FitnessCalc.set_fitness_total(0)
 
                 builder.append(my_pop.get_fittest().string_builder())
-                builder.append(GA.hold_gene_generator())
-                builder.append(GA.hold_gene_generator(True))
+                builder.append(PDGA.hold_gene_generator())
+                builder.append(PDGA.hold_gene_generator(True))
 
-                # Write the current iteration's output to the file
                 output_file.writelines(builder)
                 output_file.flush()  # Ensure the data is written to the file
 
@@ -536,5 +654,9 @@ class FitnessCalcScenario:
         FitnessCalcScenario.total_percent_profit += (FitnessCalcScenario.gain / FitnessCalcScenario.buy_point)
         FitnessCalcScenario.total_gain += FitnessCalcScenario.gain
 
+# if __name__ == "__main__":
+#     GA.main()
+
 if __name__ == "__main__":
-    GA.main()
+    pdga = PDGA()
+    pdga.main()
