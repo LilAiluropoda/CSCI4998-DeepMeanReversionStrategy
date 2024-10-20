@@ -461,15 +461,40 @@ class FitnessCalcScenario:
     @staticmethod
     def handle_up_trend(data: List[List[str]], k: int, chromosome: Chromosome) -> int:
         """
-        Handle the up trend scenario.
+        Handle the up trend scenario in the stock market simulation.
+
+        This method processes the data during an upward trend, making buy and sell decisions
+        based on the chromosome's genetic information and market conditions.
+
+        Mechanism:
+        1. Check if the buy condition is met using the chromosome's genes.
+        2. If buy condition is met:
+        a. Calculate the buy point and number of shares to purchase.
+        b. Iterate through subsequent data points to find a sell opportunity.
+        c. Update money and check for forced sell condition (15% loss).
+        d. Sell when either the target (from chromosome) is reached or forced sell is triggered.
+        3. If no buy occurs, the method simply returns the current index.
 
         Args:
-            data (List[List[str]]): The data to process.
-            k (int): The current index.
-            chromosome (Chromosome): The chromosome being evaluated.
+            data (List[List[str]]): The historical market data, where each inner list represents
+                                    a day's data (price, indicators, etc.).
+            k (int): The current index in the data, representing the day being processed.
+            chromosome (Chromosome): The chromosome being evaluated, containing genetic
+                                    information that influences buy/sell decisions.
 
         Returns:
-            int: The updated index.
+            int: The updated index after processing. If a transaction occurred, this will be
+                the index where the sell happened. Otherwise, it remains unchanged.
+
+        Side Effects:
+            - Updates various FitnessCalcScenario class variables like buy_point, sell_point,
+            share_number, money, force_sell, etc.
+            - Calls handle_sell method if a sell condition is met.
+
+        Note:
+            This method assumes an upward trend in the market. The buy and sell decisions
+            are heavily influenced by the genetic information in the chromosome, allowing
+            the genetic algorithm to optimize the trading strategy.
         """
         if float(data[k][chromosome.get_gene(5)]) <= float(chromosome.get_gene(4)):
             FitnessCalcScenario.buy_point = float(data[k][0]) * 100
@@ -491,15 +516,48 @@ class FitnessCalcScenario:
     @staticmethod
     def handle_down_trend(data: List[List[str]], k: int, chromosome: Chromosome) -> int:
         """
-        Handle the down trend scenario.
+        Handle the down trend scenario in the stock market simulation.
+
+        This method processes the data during a downward trend, making buy and sell decisions
+        based on the chromosome's genetic information and market conditions. It implements a
+        strategy for potentially profiting from falling prices.
+
+        Mechanism:
+        1. Check if the buy condition is met using the chromosome's genes.
+        - In a down trend, this might represent identifying a potential bottom or reversal point.
+        2. If buy condition is met:
+        a. Calculate the buy point and number of shares to purchase.
+        b. Initialize force_sell flag to False.
+        c. Iterate through subsequent data points to find a sell opportunity:
+            - Update sell_point and calculate potential money after selling.
+            - Check for stop-loss condition (15% loss from purchase price).
+            - If stop-loss is triggered, update money and set force_sell to True.
+            - Check if sell condition (from chromosome) is met or if force_sell is True.
+        d. If sell condition is met, call handle_sell method and update the index.
+        3. If no buy occurs or after a sell, the method returns the current/updated index.
 
         Args:
-            data (List[List[str]]): The data to process.
-            k (int): The current index.
-            chromosome (Chromosome): The chromosome being evaluated.
+            data (List[List[str]]): The historical market data, where each inner list represents
+                                    a day's data (price, indicators, etc.).
+            k (int): The current index in the data, representing the day being processed.
+            chromosome (Chromosome): The chromosome being evaluated, containing genetic
+                                    information that influences buy/sell decisions.
 
         Returns:
-            int: The updated index.
+            int: The updated index after processing. If a transaction occurred, this will be
+                the index where the sell happened. Otherwise, it remains unchanged.
+
+        Side Effects:
+            - Updates various FitnessCalcScenario class variables including:
+            buy_point, sell_point, share_number, money, money_temp, and force_sell.
+            - Calls handle_sell method if a sell condition is met.
+
+        Note:
+            This method is specifically designed for downward market trends. The buy and sell
+            decisions are heavily influenced by the genetic information in the chromosome,
+            allowing the genetic algorithm to optimize the trading strategy for bearish markets.
+            The strategy implemented here might involve techniques like short selling or
+            identifying potential reversal points in a downtrend.
         """
         if float(data[k][chromosome.get_gene(1)]) <= float(chromosome.get_gene(0)):
             FitnessCalcScenario.buy_point = float(data[k][0]) * 100
@@ -521,11 +579,47 @@ class FitnessCalcScenario:
     @staticmethod
     def handle_sell(k: int, j: int) -> None:
         """
-        Handle the sell scenario.
+        Handle the sell scenario in the stock market simulation.
+
+        This method processes the sale of stocks, updates the financial metrics,
+        and records the transaction details. It's called when a sell condition is met,
+        either due to reaching a target price or triggering a stop-loss.
+
+        Mechanism:
+        1. Calculate the gain (or loss) from the transaction:
+        - Gain = sell_point - buy_point
+        2. Calculate the new money balance after the sale:
+        - money_temp = (share_number * sell_point) - transaction_fee
+        3. Update the current money with the new balance.
+        4. Update maximum and minimum money reached during the simulation.
+        5. Increment the transaction count.
+        6. Add to the total percent profit:
+        - total_percent_profit += (gain / buy_point)
+        7. Add to the total gain.
 
         Args:
-            k (int): The buy index.
-            j (int): The sell index.
+            k (int): The buy index in the data array, representing when the purchase was made.
+            j (int): The sell index in the data array, representing when the sale is executed.
+
+        Returns:
+            None
+
+        Side Effects:
+            Updates several class variables of FitnessCalcScenario:
+            - gain: The profit or loss from this specific transaction.
+            - money: The current balance after the sale.
+            - maximum_money: The highest balance achieved so far.
+            - minimum_money: The lowest balance reached so far.
+            - transaction_count: Total number of buy-sell transactions.
+            - total_percent_profit: Cumulative percentage profit from all transactions.
+            - total_gain: Cumulative absolute profit from all transactions.
+
+        Note:
+            - This method assumes that buy_point, sell_point, and share_number have been
+            set correctly before it's called.
+            - A transaction fee of 1.0 is subtracted from the sale proceeds (the '- 1.0' in money_temp calculation).
+            - This method is crucial for tracking the performance of the trading strategy
+            and ultimately determines the fitness of the chromosome in the genetic algorithm.
         """
         FitnessCalcScenario.gain = FitnessCalcScenario.sell_point - FitnessCalcScenario.buy_point
         FitnessCalcScenario.money_temp = (FitnessCalcScenario.share_number * FitnessCalcScenario.sell_point) - 1.0
