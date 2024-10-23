@@ -377,83 +377,229 @@ class GA:
 
         # print(f"Output written to: {output_filename}")
         
-class PDGA(GA):
-    """Class for running the Primal-Dual Genetic Algorithm."""
 
-    def __init__(self, population_size: int = 300, crossover_rate: float = 0.7, mutation_rate: float = 0.001):
+# class PDGA(GA):
+#     """Class for running the Primal-Dual Genetic Algorithm."""
+
+#     def __init__(self, population_size: int = 300, crossover_rate: float = 0.7, mutation_rate: float = 0.001):
+#         super().__init__()
+#         self.population_size = population_size
+#         self.crossover_rate = crossover_rate
+#         self.mutation_rate = mutation_rate
+
+#     @staticmethod
+#     def primal_dual_mapping(chromosome: Chromosome) -> Chromosome:
+#         """
+#         Create a dual chromosome by flipping all bits of the primal chromosome.
+
+#         Args:
+#             chromosome (Chromosome): The primal chromosome.
+
+#         Returns:
+#             Chromosome: The dual chromosome.
+#         """
+#         dual = Chromosome()
+#         for i in range(chromosome.size()):
+#             dual.set_gene(i, 1 - chromosome.get_gene(i))
+#         return dual
+
+#     def select_for_dual_evaluation(self, population: Population, num_select: int) -> List[Chromosome]:
+#         """
+#         Select chromosomes for dual evaluation based on their fitness.
+
+#         Args:
+#             population (Population): The current population.
+#             num_select (int): Number of chromosomes to select.
+
+#         Returns:
+#             List[Chromosome]: Selected chromosomes for dual evaluation.
+#         """
+#         sorted_chromosomes = sorted(population.chromosomes, key=lambda c: c.get_fitness())
+#         return sorted_chromosomes[:num_select]
+
+#     def adaptive_dual_selection_size(self, generation: int, population_size: int) -> int:
+#         """
+#         Adaptively determine the number of chromosomes for dual evaluation.
+
+#         Args:
+#             generation (int): Current generation number.
+#             population_size (int): Size of the population.
+
+#         Returns:
+#             int: Number of chromosomes to select for dual evaluation.
+#         """
+#         return max(1, int(population_size * math.exp(-0.05 * generation)))
+
+#     def evolve_population(self, pop: Population) -> Population:
+#         """
+#         Evolve a population using the PDGA approach.
+
+#         Args:
+#             pop (Population): The population to evolve.
+
+#         Returns:
+#             Population: The evolved population.
+#         """
+#         # Call evolve_population from Algorithm, not GA
+#         new_population = Algorithm.evolve_population(pop)
+        
+#         # Perform dual evaluation
+#         num_dual_eval = self.adaptive_dual_selection_size(self.counter, pop.size())
+#         selected_for_dual = self.select_for_dual_evaluation(new_population, num_dual_eval)
+        
+#         for chromosome in selected_for_dual:
+#             dual_chromosome = self.primal_dual_mapping(chromosome)
+#             if dual_chromosome.get_fitness() > chromosome.get_fitness():
+#                 # Replace the primal chromosome with its superior dual
+#                 index = new_population.chromosomes.index(chromosome)
+#                 new_population.save_chromosome(index, dual_chromosome)
+
+#         return new_population
+
+#     @staticmethod
+#     def main() -> None:
+#         """Main method to run the Primal-Dual Genetic Algorithm."""
+#         pdga = PDGA()
+#         output_filename = PDGA.get_unique_filename("resources2/GATableListTraining.txt")
+        
+#         with open(output_filename, "w") as output_file:
+#             while pdga.counter < 50:
+#                 pdga.counter += 1
+#                 my_pop = Population(pdga.population_size, True)
+
+#                 generation_count = 0
+#                 my_pop.print_population()
+
+#                 builder: List[str] = []
+
+#                 while my_pop.get_fittest().get_fitness()*0.7 > FitnessCalc.get_avg_fitness():
+#                     generation_count += 1
+#                     fittest = my_pop.get_fittest()
+#                     print(f"Generation: {generation_count} Fittest: {fittest.get_fitness()} Fittest Chromosome: {fittest}")
+#                     print(f"FitnessCalc.get_avg_fitness(): {FitnessCalc.get_avg_fitness()}")
+#                     my_pop = pdga.evolve_population(my_pop)
+
+#                 print("Solution found!")
+#                 print(f"Generation: {generation_count}")
+#                 print("Genes:")
+#                 my_pop.get_fittest().print_chromosome()
+#                 print("--------------------------------")
+#                 FitnessCalc.set_fitness_total(0)
+
+#                 builder.append(my_pop.get_fittest().string_builder())
+#                 builder.append(PDGA.hold_gene_generator())
+#                 builder.append(PDGA.hold_gene_generator(True))
+
+#                 output_file.writelines(builder)
+#                 output_file.flush()  # Ensure the data is written to the file
+
+#         print(f"Output written to: {output_filename}")
+
+class PDGA(GA):
+    def __init__(self, population_size: int = 300):
         super().__init__()
         self.population_size = population_size
-        self.crossover_rate = crossover_rate
-        self.mutation_rate = mutation_rate
+        # Modified parameters
+        self.tournament_size = 3  # Reduced from 5
+        self.mutation_rate = 0.02  # Increased from 0.001
+        self.crossover_rate = 0.8  # Added
+        
+        # Dual evaluation parameterss
+        self.n_valid_duals = 0
+        self.n_total_duals = 0
+        self.threshold = 0.7  # Reduced from 0.9
+        self.decrease_rate = 0.8  # Changed from 0.9
+        self.increase_rate = 1.2  # Changed from 1.1
+        self.n_select = self.population_size // 4  # Changed from population_size // 2
+        self.n_min = max(1, self.population_size // 10)
+        self.n_max = self.population_size // 2
 
     @staticmethod
     def primal_dual_mapping(chromosome: Chromosome) -> Chromosome:
-        """
-        Create a dual chromosome by flipping all bits of the primal chromosome.
-
-        Args:
-            chromosome (Chromosome): The primal chromosome.
-
-        Returns:
-            Chromosome: The dual chromosome.
-        """
+        """Modified dual mapping to increase diversity"""
         dual = Chromosome()
         for i in range(chromosome.size()):
-            dual.set_gene(i, 1 - chromosome.get_gene(i))
+            if i in [0, 4]:  # RSI buy values (5-40)
+                value = chromosome.get_gene(i)
+                dual_value = max(5, min(40, 45 - value + random.randint(-2, 2)))
+                dual.set_gene(i, dual_value)
+            elif i in [2, 6]:  # RSI sell values (60-95)
+                value = chromosome.get_gene(i)
+                dual_value = max(60, min(95, 155 - value + random.randint(-2, 2)))
+                dual.set_gene(i, dual_value)
+            elif i in [1, 3, 5, 7]:  # RSI intervals (5-20)
+                value = chromosome.get_gene(i)
+                dual_value = max(5, min(20, 25 - value + random.randint(-1, 1)))
+                dual.set_gene(i, dual_value)
         return dual
-
-    def select_for_dual_evaluation(self, population: Population, num_select: int) -> List[Chromosome]:
-        """
-        Select chromosomes for dual evaluation based on their fitness.
-
-        Args:
-            population (Population): The current population.
-            num_select (int): Number of chromosomes to select.
-
-        Returns:
-            List[Chromosome]: Selected chromosomes for dual evaluation.
-        """
-        sorted_chromosomes = sorted(population.chromosomes, key=lambda c: c.get_fitness())
-        return sorted_chromosomes[:num_select]
-
-    def adaptive_dual_selection_size(self, generation: int, population_size: int) -> int:
-        """
-        Adaptively determine the number of chromosomes for dual evaluation.
-
-        Args:
-            generation (int): Current generation number.
-            population_size (int): Size of the population.
-
-        Returns:
-            int: Number of chromosomes to select for dual evaluation.
-        """
-        return max(1, int(population_size * math.exp(-0.05 * generation)))
 
     def evolve_population(self, pop: Population) -> Population:
         """
-        Evolve a population using the PDGA approach.
-
+        Evolve population using PDGA approach with error handling.
+        
         Args:
             pop (Population): The population to evolve.
-
+        
         Returns:
             Population: The evolved population.
         """
-        # Call evolve_population from Algorithm, not GA
-        new_population = Algorithm.evolve_population(pop)
-        
-        # Perform dual evaluation
-        num_dual_eval = self.adaptive_dual_selection_size(self.counter, pop.size())
-        selected_for_dual = self.select_for_dual_evaluation(new_population, num_dual_eval)
-        
-        for chromosome in selected_for_dual:
-            dual_chromosome = self.primal_dual_mapping(chromosome)
-            if dual_chromosome.get_fitness() > chromosome.get_fitness():
-                # Replace the primal chromosome with its superior dual
-                index = new_population.chromosomes.index(chromosome)
-                new_population.save_chromosome(index, dual_chromosome)
+        try:
+            # Regular GA evolution
+            new_population = Algorithm.evolve_population(pop)
+            
+            # Reset dual evaluation counters
+            self.n_valid_duals = 0
+            self.n_total_duals = 0
+            
+            # Get number of chromosomes for dual evaluation
+            num_dual_eval = self.adaptive_dual_selection_size()
+            
+            # Select worst performing chromosomes
+            valid_chromosomes = [c for c in new_population.chromosomes if c is not None]
+            valid_chromosomes.sort(key=lambda x: x.get_fitness())
+            chromosomes_for_dual = valid_chromosomes[:num_dual_eval]
+            
+            # Evaluate duals
+            for chromosome in chromosomes_for_dual:
+                try:
+                    self.n_total_duals += 1
+                    dual = self.primal_dual_mapping(chromosome)
+                    dual_fitness = dual.get_fitness()
+                    
+                    if dual_fitness > chromosome.get_fitness():
+                        self.n_valid_duals += 1
+                        # Replace inferior chromosome with superior dual
+                        idx = new_population.chromosomes.index(chromosome)
+                        new_population.save_chromosome(idx, dual)
+                except Exception as e:
+                    print(f"Error evaluating dual chromosome: {str(e)}")
+                    continue
+            
+            return new_population
+            
+        except Exception as e:
+            print(f"Error in evolve_population: {str(e)}")
+            return pop  # Return original population if evolution fails
 
-        return new_population
+    def adaptive_dual_selection_size(self) -> int:
+        """
+        Adaptively determine number of chromosomes for dual evaluation.
+        
+        Returns:
+            int: Number of chromosomes to select for dual evaluation.
+        """
+        if self.n_total_duals == 0:
+            return self.n_max
+        
+        valid_ratio = self.n_valid_duals / self.n_total_duals
+        if valid_ratio < self.threshold:
+            self.n_select = max(self.n_min, 
+                              int(self.n_select * self.decrease_rate))
+        elif valid_ratio > self.threshold:
+            self.n_select = min(self.n_max, 
+                              int(self.n_select * self.increase_rate))
+        
+        return self.n_select
 
     @staticmethod
     def main() -> None:
@@ -467,15 +613,33 @@ class PDGA(GA):
                 my_pop = Population(pdga.population_size, True)
 
                 generation_count = 0
-                my_pop.print_population()
-
+                min_generations = 1  # Minimum generations to run
+                max_generations = 6  # Maximum generations allowed
+                
                 builder: List[str] = []
 
-                while my_pop.get_fittest().get_fitness()*0.7 > FitnessCalc.get_avg_fitness():
+                while generation_count < max_generations:
                     generation_count += 1
                     fittest = my_pop.get_fittest()
-                    print(f"Generation: {generation_count} Fittest: {fittest.get_fitness()} Fittest Chromosome: {fittest}")
-                    print(f"FitnessCalc.get_avg_fitness(): {FitnessCalc.get_avg_fitness()}")
+                    current_avg_fitness = FitnessCalc.get_avg_fitness()
+                    
+                    # Calculate metrics
+                    valid_ratio = pdga.n_valid_duals / pdga.n_total_duals if pdga.n_total_duals > 0 else 0
+                    convergence = current_avg_fitness / fittest.get_fitness() if fittest.get_fitness() > 0 else 0
+                    
+                    print(f"Generation: {generation_count} Fittest: {fittest.get_fitness()} "
+                        f"Fittest Chromosome: {fittest}")
+                    print(f"Valid Duals Ratio: {valid_ratio:.2f}")
+                    print(f"Convergence: {convergence:.2f}")
+                    print(f"Average Fitness: {current_avg_fitness}")
+
+                    # Check if we've reached optimal conditions
+                    if generation_count >= min_generations and \
+                    0.25 <= valid_ratio and \
+                    0.6 <= convergence <= 0.9:
+                        print("Optimal conditions reached!")
+                        break
+                    
                     my_pop = pdga.evolve_population(my_pop)
 
                 print("Solution found!")
@@ -490,7 +654,7 @@ class PDGA(GA):
                 builder.append(PDGA.hold_gene_generator(True))
 
                 output_file.writelines(builder)
-                output_file.flush()  # Ensure the data is written to the file
+                output_file.flush()
 
         print(f"Output written to: {output_filename}")
 
@@ -654,9 +818,115 @@ class FitnessCalcScenario:
         FitnessCalcScenario.total_percent_profit += (FitnessCalcScenario.gain / FitnessCalcScenario.buy_point)
         FitnessCalcScenario.total_gain += FitnessCalcScenario.gain
 
+
+import multiprocessing
+import matplotlib.pyplot as plt
+import argparse
+from typing import List, Tuple
+
+class EnhancedPDGA(PDGA):
+    def __init__(self, population_size: int = 300, crossover_rate: float = 0.7, mutation_rate: float = 0.001,
+                 selection_method: str = 'tournament', adaptive_rates: bool = False):
+        super().__init__(population_size, crossover_rate, mutation_rate)
+        self.selection_method = selection_method
+        self.adaptive_rates = adaptive_rates
+        self.best_fitnesses: List[float] = []
+        self.avg_fitnesses: List[float] = []
+
+    def select_parent(self, population: Population) -> Chromosome:
+        if self.selection_method == 'tournament':
+            return Algorithm.tournament_selection(population)
+        elif self.selection_method == 'roulette':
+            return self.roulette_wheel_selection(population)
+        # Add more selection methods as needed
+
+    def roulette_wheel_selection(self, population: Population) -> Chromosome:
+        total_fitness = sum(c.get_fitness() for c in population.chromosomes)
+        pick = random.uniform(0, total_fitness)
+        current = 0
+        for chromosome in population.chromosomes:
+            current += chromosome.get_fitness()
+            if current > pick:
+                return chromosome
+        return population.chromosomes[-1]  # Fallback to last chromosome
+
+    def adapt_rates(self) -> None:
+        if self.adaptive_rates:
+            # Example: Decrease mutation rate as algorithm progresses
+            self.mutation_rate = max(0.0001, self.mutation_rate * 0.99)
+
+    def evolve_population(self, pop: Population) -> Population:
+        new_population = super().evolve_population(pop)
+        self.adapt_rates()
+        return new_population
+
+    def calculate_fitness_parallel(self, chromosomes: List[Chromosome]) -> List[Tuple[Chromosome, int]]:
+        with multiprocessing.Pool() as pool:
+            results = pool.map(FitnessCalcScenario.calculate_fitness, chromosomes)
+        return list(zip(chromosomes, results))
+
+    def run(self, max_generations: int = 1000, early_stop: int = 50) -> Chromosome:
+        population = Population(self.population_size, True)
+        stagnant_generations = 0
+        best_fitness = float('-inf')
+
+        for generation in range(max_generations):
+            # Parallel fitness calculation
+            fitness_results = self.calculate_fitness_parallel(population.chromosomes)
+            for chromosome, fitness in fitness_results:
+                chromosome.fitness = fitness
+
+            fittest = population.get_fittest()
+            current_best_fitness = fittest.get_fitness()
+            avg_fitness = sum(c.get_fitness() for c in population.chromosomes) / len(population.chromosomes)
+
+            self.best_fitnesses.append(current_best_fitness)
+            self.avg_fitnesses.append(avg_fitness)
+
+            print(f"Generation {generation}: Best Fitness = {current_best_fitness}, Avg Fitness = {avg_fitness}")
+
+            if current_best_fitness > best_fitness:
+                best_fitness = current_best_fitness
+                stagnant_generations = 0
+            else:
+                stagnant_generations += 1
+
+            if stagnant_generations >= early_stop:
+                print(f"Early stopping at generation {generation}")
+                break
+
+            population = self.evolve_population(population)
+
+        return population.get_fittest()
+
+    def plot_progress(self) -> None:
+        plt.figure(figsize=(10, 5))
+        plt.plot(self.best_fitnesses, label='Best Fitness')
+        plt.plot(self.avg_fitnesses, label='Average Fitness')
+        plt.xlabel('Generation')
+        plt.ylabel('Fitness')
+        plt.title('PDGA Progress')
+        plt.legend()
+        plt.show()
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Run Enhanced Primal-Dual Genetic Algorithm')
+    parser.add_argument('--population', type=int, default=300, help='Population size')
+    parser.add_argument('--generations', type=int, default=1000, help='Maximum number of generations')
+    parser.add_argument('--selection', choices=['tournament', 'roulette'], default='tournament', help='Selection method')
+    parser.add_argument('--adaptive', action='store_true', help='Use adaptive rates')
+    return parser.parse_args()
+
+if __name__ == "__main__":
+    args = parse_args()
+    pdga = EnhancedPDGA(population_size=args.population, selection_method=args.selection, adaptive_rates=args.adaptive)
+    best_solution = pdga.run(max_generations=args.generations)
+    print(f"Best solution fitness: {best_solution.get_fitness()}")
+    pdga.plot_progress()
+
 # if __name__ == "__main__":
 #     GA.main()
 
-if __name__ == "__main__":
-    pdga = PDGA()
-    pdga.main()
+# if __name__ == "__main__":
+#     pdga = PDGA()
+#     pdga.main()
