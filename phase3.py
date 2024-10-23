@@ -26,22 +26,24 @@ def load_libsvm(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
             features.append([feat.get(i, 0.) for i in range(1, max(feat.keys()) + 1)])
     return np.array(features), np.array(labels)
 
+# In phase3.py
 def train_model(X_train: np.ndarray, y_train: np.ndarray) -> MLPClassifier:
-    """
-    Train a Multi-Layer Perceptron Classifier.
-
-    Args:
-        X_train (np.ndarray): Training features.
-        y_train (np.ndarray): Training labels.
-
-    Returns:
-        MLPClassifier: Trained model.
-    """
+    """Train a Multi-Layer Perceptron Classifier."""
     layers: List[int] = [20, 10, 8, 6, 5]
-    model = MLPClassifier(hidden_layer_sizes=layers, 
-                          max_iter=200, 
-                          random_state=1234, 
-                          batch_size=128)
+    model = MLPClassifier(
+        hidden_layer_sizes=layers,
+        max_iter=1000,  # Increased from 200
+        random_state=1234,
+        batch_size='auto',  # Changed from 128
+        learning_rate='adaptive',
+        early_stopping=True,
+        validation_fraction=0.2,
+        n_iter_no_change=20,
+        solver='adam',
+        alpha=0.0001
+    )
+    
+    # Remove the sample_weight parameter
     model.fit(X_train, y_train)
     return model
 
@@ -79,6 +81,19 @@ def save_results(y_test: np.ndarray, X_test: np.ndarray, predictions: np.ndarray
     })
     results.to_csv("resources2/outputMLP.csv", index=False, sep=';', header=False)
 
+def preprocess_data(X_train: np.ndarray, X_test: np.ndarray, y_train: np.ndarray, y_test: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Preprocess the data."""
+    # Handle missing values
+    X_train = np.nan_to_num(X_train)
+    X_test = np.nan_to_num(X_test)
+    
+    # Normalize features
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    return X_train_scaled, X_test_scaled, y_train, y_test
+
 def phase_process() -> None:
     """
     Main function to process the data, train the model, evaluate it, and save results.
@@ -88,6 +103,9 @@ def phase_process() -> None:
         X_train, y_train = load_libsvm("resources2/GATableListTraining.txt")
         X_test, y_test = load_libsvm("resources2/GATableListTest.txt")
 
+        # Preprocess data
+        X_train_scaled, X_test_scaled, y_train, y_test = preprocess_data(X_train, X_test, y_train, y_test)
+        
         # Normalize features
         scaler = StandardScaler()
         X_train_scaled: np.ndarray = scaler.fit_transform(X_train)
@@ -114,3 +132,4 @@ def phase_process() -> None:
 
 if __name__ == "__main__":
     phase_process()
+
