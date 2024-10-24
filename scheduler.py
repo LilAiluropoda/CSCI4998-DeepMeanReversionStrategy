@@ -22,7 +22,7 @@ class Scheduler:
     @staticmethod
     def run_ga():
         print("Running Genetic Algorithm")
-        GA.main()
+        # GA.main()
 
     @staticmethod
     def main():
@@ -33,7 +33,7 @@ class Scheduler:
         print("Phase1")
         run_phase1()
 
-        Scheduler.run_ga()
+        # Scheduler.run_ga()
 
         print("Phase2")
         phase2_process(Scheduler.file_path_output_of_rsi_test)
