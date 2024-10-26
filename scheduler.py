@@ -1,7 +1,7 @@
 import os
 import glob
 from phase0 import reverse_file, phase_process as phase0_process
-from phase1 import run_phase1
+from phase1 import FeatureProcessor
 from phase2 import phase_process as phase2_process
 from phase3 import phase_process as phase3_process
 from phase4 import phase_process as phase4_process
@@ -26,12 +26,21 @@ class Scheduler:
 
     @staticmethod
     def main():
+        processor = FeatureProcessor()
 
-        print("Phase0")
-        phase0_process(Scheduler.input_file_path_phase1_test)
+        custom_params = {
+            'rsi': {'periods': range(1, 21)},
+            'sma': {'periods': [50, 200]}
+        }
 
-        print("Phase1")
-        run_phase1()
+        print("Phase 0 + 1")
+
+        processor.run_analysis(
+            input_file_path=Scheduler.input_file_path_phase1_test,
+            output_file_path="resources2/output.csv",
+            features=['rsi', 'sma'],
+            custom_params=custom_params
+        )
 
         # Scheduler.run_ga()
 
