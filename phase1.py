@@ -1,77 +1,69 @@
-from abc import ABC, abstractmethod
 from typing import List, Dict, Callable, Any
-import csv
 import pandas as pd
 import numpy as np
 from indicators.rsi import RSIIndicator
 from indicators.sma import SMAIndicator
-from dataclasses import dataclass
-
-@dataclass
-class SharePrice:
-    """Represents a single day's stock price data."""
-    date: str
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
-    adj_close: float
 
 class DataLoader:
-    """Handles data loading and initial preprocessing."""
+    """Handles all data loading, processing, and output operations."""
     
-    def read_and_reverse_csv(self, input_path: str) -> List[SharePrice]:
-        """Reads and reverses stock price data from a CSV file."""
-        share_prices: List[SharePrice] = []
-        
+    def load_stock_data(self, input_path: str) -> pd.DataFrame:
+        """
+        Reads and processes CSV file directly into a DataFrame.
+        Handles data reversal and adjustment calculations.
+        """
         try:
-            with open(input_path, 'r') as input_file:
-                lines = input_file.readlines()
-                
-            for line in reversed(lines):
-                try:
-                    share_price = self._parse_line(line)
-                    share_prices.append(share_price)
-                except (ValueError, IndexError) as e:
-                    print(f"Skipping row due to error: {e}")
-                    
-        except IOError as e:
-            print(f"An error occurred while processing the file: {e}")
+            # Define column names for the CSV
+            columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close']
             
-        return share_prices
+            # Read CSV directly into DataFrame with specified headers
+            df = pd.read_csv(
+                input_path, 
+                header=None, 
+                names=columns,
+                parse_dates=['Date']
+            )
+            
+            # Reverse the data
+            df = df.iloc[::-1].reset_index(drop=True)
+            
+            # Calculate adjustment factor
+            df['adj_factor'] = df['Adj Close'] / df['Close']
+            
+            # Adjust OHLC values
+            df['open'] = df['Open'] * df['adj_factor']
+            df['high'] = df['High'] * df['adj_factor']
+            df['low'] = df['Low'] * df['adj_factor']
+            df['close'] = df['Adj Close']
+            df['volume'] = df['Volume']
+            df['date'] = df['Date']
+            
+            # Select and sort final columns
+            return df[['date', 'close', 'open', 'high', 'low', 'volume']].sort_values('date')
+            
+        except Exception as e:
+            print(f"An error occurred while processing the file: {e}")
+            return pd.DataFrame()
+  
+    def format_output(self, df: pd.DataFrame) -> List[str]:
+        """Formats DataFrame into output strings."""
+        output_rows: List[str] = []
+        for index, row in df.iterrows():
+            output_row: List[str] = [
+                f"{row['close']:.4f}",
+                *[f"{row[f'rsi{i}']:.0f}" for i in range(1, 21)],
+                f"{row['sma50']:.2f}",
+                f"{row['sma200']:.2f}"
+            ]
+            output_rows.append(';'.join(output_row))
+            print(f"counterRow: {index + 1}")
+        return output_rows
     
-    def _parse_line(self, line: str) -> SharePrice:
-        """Parses a CSV line into a SharePrice object."""
-        cleaned_line = line.strip().replace('"', '')
-        row = cleaned_line.split(',')
-        
-        date: str = row[0]
-        adj_close: float = float(row[6])
-        adj_factor: float = adj_close / float(row[4])
-        
-        return SharePrice(
-            date=date,
-            open=float(row[1]) * adj_factor,
-            high=float(row[2]) * adj_factor,
-            low=float(row[3]) * adj_factor,
-            close=adj_close,
-            volume=float(row[5]),
-            adj_close=adj_close
-        )
-
-class DataFrameBuilder:
-    """Handles creation and manipulation of DataFrames."""
-    
-    def create_base_dataframe(self, share_prices: List[SharePrice]) -> pd.DataFrame:
-        """Creates and initializes the base DataFrame from share price data."""
-        df: pd.DataFrame = pd.DataFrame(
-            [(sp.date, sp.close, sp.open, sp.high, sp.low, sp.volume) 
-             for sp in share_prices],
-            columns=['date', 'close', 'open', 'high', 'low', 'volume']
-        )
-        df['date'] = pd.to_datetime(df['date'])
-        return df.sort_values('date')
+    def write_output(self, output_rows: List[str], output_file_path: str) -> None:
+        """Writes formatted output to file."""
+        with open(output_file_path, "w", newline='') as f:
+            for row in output_rows:
+                f.write(f"{row}\n")
 
 class TechnicalIndicatorCalculator:
     """Handles calculation of technical indicators."""
@@ -107,7 +99,7 @@ class TechnicalIndicatorCalculator:
     def _calculate_rsi_features(self, df: pd.DataFrame, close_prices: np.ndarray, 
                               params: Dict[str, Any]) -> pd.DataFrame:
         """Calculates RSI indicators."""
-        def _apply_rsi_padding(self, df: pd.DataFrame, period: int) -> None:
+        def _apply_rsi_padding(df: pd.DataFrame, period: int) -> None:
             """Applies custom padding to RSI values."""
             df.loc[0, f'rsi{period}'] = 0.0
             df.loc[1, f'rsi{period}'] = 100.0
@@ -115,6 +107,7 @@ class TechnicalIndicatorCalculator:
             for j in range(2, len(df)):
                 if j < period:
                     df.loc[j, f'rsi{period}'] = df.loc[j, f'rsi{j}']
+                    
         for period in params['periods']:
             rsi_indicator: RSIIndicator = RSIIndicator(close_prices, period)
             df[f'rsi{period}'] = [rsi_indicator.calculate(j) for j in range(len(df))]
@@ -129,37 +122,12 @@ class TechnicalIndicatorCalculator:
             df[f'sma{period}'] = [sma_indicator.calculate(j) for j in range(len(df))]
         return df
 
-class OutputFormatter:
-    """Handles formatting and writing of output data."""
-    
-    def format_output(self, df: pd.DataFrame) -> List[str]:
-        """Formats DataFrame into output strings."""
-        output_rows: List[str] = []
-        for index, row in df.iterrows():
-            output_row: List[str] = [
-                f"{row['close']:.4f}",
-                *[f"{row[f'rsi{i}']:.0f}" for i in range(1, 21)],
-                f"{row['sma50']:.2f}",
-                f"{row['sma200']:.2f}"
-            ]
-            output_rows.append(';'.join(output_row))
-            print(f"counterRow: {index + 1}")
-        return output_rows
-    
-    def write_output(self, output_rows: List[str], output_file_path: str) -> None:
-        """Writes formatted output to file."""
-        with open(output_file_path, "w", newline='') as f:
-            for row in output_rows:
-                f.write(f"{row}\n")
-
 class FeatureProcessor:
     """Orchestrates the feature processing workflow."""
     
     def __init__(self):
         self.data_loader = DataLoader()
-        self.df_builder = DataFrameBuilder()
         self.indicator_calculator = TechnicalIndicatorCalculator()
-        self.output_formatter = OutputFormatter()
 
     def run_analysis(self, input_file_path: str, output_file_path: str, 
                     features: List[str] = None, 
@@ -173,37 +141,16 @@ class FeatureProcessor:
             features: List of features to calculate
             custom_params: Custom parameters for feature calculation
         """
-        # Load and preprocess data
-        share_prices: List[SharePrice] = self.data_loader.read_and_reverse_csv(input_file_path)
+        # Load and preprocess data directly into DataFrame
+        df: pd.DataFrame = self.data_loader.load_stock_data(input_file_path)
         
-        # Create DataFrame
-        df: pd.DataFrame = self.df_builder.create_base_dataframe(share_prices)
+        if df.empty:
+            print("Failed to load data. Aborting analysis.")
+            return
         
         # Calculate features
         df = self.indicator_calculator.calculate_features(df, features, custom_params)
         
         # Format and write output
-        output_rows: List[str] = self.output_formatter.format_output(df)
-        self.output_formatter.write_output(output_rows, output_file_path)
-
-def main():
-    processor = FeatureProcessor()
-    
-    input_path: str = "resources2/APPL/APPL19972007.csv"
-    output_path: str = "resources2/output.csv"
-    
-    # Example of running with custom features and parameters
-    custom_params = {
-        'rsi': {'periods': range(1, 21)},
-        'sma': {'periods': [50, 200]}
-    }
-    
-    processor.run_analysis(
-        input_file_path=input_path,
-        output_file_path=output_path,
-        features=['rsi', 'sma'],
-        custom_params=custom_params
-    )
-
-if __name__ == "__main__":
-    main()
+        output_rows: List[str] = self.data_loader.format_output(df)
+        self.data_loader.write_output(output_rows, output_file_path)

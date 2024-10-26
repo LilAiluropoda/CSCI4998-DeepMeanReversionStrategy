@@ -1,6 +1,3 @@
-import os
-import glob
-from phase0 import reverse_file, phase_process as phase0_process
 from phase1 import FeatureProcessor
 from phase2 import phase_process as phase2_process
 from phase3 import phase_process as phase3_process
@@ -27,7 +24,7 @@ class Scheduler:
     @staticmethod
     def main():
         processor = FeatureProcessor()
-
+        
         custom_params = {
             'rsi': {'periods': range(1, 21)},
             'sma': {'periods': [50, 200]}
