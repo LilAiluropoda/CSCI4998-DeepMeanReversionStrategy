@@ -1,5 +1,5 @@
 from phase1 import FeatureMaker
-from phase2 import phase_process as phase2_process
+from phase2 import TestDataGenerator
 from phase3 import phase_process as phase3_process
 from phase4 import phase_process as phase4_process
 from phase5 import phase_process as phase5_process
@@ -24,6 +24,7 @@ class Scheduler:
     @staticmethod
     def main():
         processor = FeatureMaker()
+        test_data_getter = TestDataGenerator(Scheduler.file_path_output_of_rsi_test, "resources2/GATableListTest.txt")
         
         custom_params = {
             'rsi': {'periods': range(1, 21)},
@@ -42,7 +43,7 @@ class Scheduler:
         # Scheduler.run_ga()
 
         print("Phase2")
-        phase2_process(Scheduler.file_path_output_of_rsi_test)
+        test_data_getter.process()
 
         print("Phase3")
         phase3_process()

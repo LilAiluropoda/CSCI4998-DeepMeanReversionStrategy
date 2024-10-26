@@ -424,7 +424,7 @@ def phase_process() -> None:
         results.append(result)
 
         # Create visualization
-        visualize_trading_decisions(data, company)
+        # visualize_trading_decisions(data, company)
 
     # Display results table
     display_results(results)
