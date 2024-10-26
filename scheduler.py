@@ -1,9 +1,10 @@
 from phase1 import FeatureMaker
 from phase2 import TestDataGenerator
-from phase3 import phase_process as phase3_process
+from phase3 import ModelConfig, MLTrader
 from phase4 import phase_process as phase4_process
 from phase5 import phase_process as phase5_process
 from GA import GA
+from pathlib import Path
 
 class Scheduler:
     CREATE_TEST_FILE = 0
@@ -46,7 +47,44 @@ class Scheduler:
         test_data_getter.process()
 
         print("Phase3")
-        phase3_process()
+        # Define paths
+        base_path = Path("resources2")
+        train_path = str(base_path / "GATableListTraining.txt")
+        test_path = str(base_path / "GATableListTest.txt")
+        output_path = str(base_path / "outputMLP.csv")
+
+        # Configure model
+        config = ModelConfig(
+            hidden_layers=[20, 10, 8, 6, 5],
+            max_iterations=200,
+            random_state=1234,
+            batch_size=128
+        )
+        
+        # Initialize MLTrader
+        trader = MLTrader(config)
+
+        # Prepare data
+        (X_train, y_train), (X_test, y_test) = trader.prepare_data(
+            train_path, test_path
+        )
+
+        # Train model
+        trader.train(X_train, y_train)
+
+        # Evaluate model
+        metrics = trader.evaluate(X_test, y_test)
+
+        # Display results
+        print(f"Test set accuracy = {metrics.accuracy}")
+        print("\nConfusion matrix:")
+        print(metrics.confusion_matrix)
+        print("\nClassification Report:")
+        print(metrics.classification_report)
+
+        # Save predictions
+        trader.save_results(y_test, X_test, metrics.predictions, output_path)
+
 
         print("Phase4")
         phase4_process(Scheduler.file_path_output_of_mlp, Scheduler.file_path_output_of_rsi_test)

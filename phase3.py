@@ -3,114 +3,168 @@ import pandas as pd
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from sklearn.preprocessing import StandardScaler
-from typing import Tuple, List, Dict
-import warnings
+from typing import Tuple, List, Optional
+from dataclasses import dataclass
 
-def load_libsvm(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
+@dataclass
+class ModelConfig:
+    """Configuration parameters for the neural network model."""
+    hidden_layers: List[int] = None
+    max_iterations: int = 200
+    random_state: int = 1234
+    batch_size: int = 128
+
+    def __post_init__(self):
+        if self.hidden_layers is None:
+            self.hidden_layers = [20, 10, 8, 6, 5]
+
+@dataclass
+class ModelMetrics:
+    """Store model evaluation metrics."""
+    accuracy: float
+    confusion_matrix: np.ndarray
+    classification_report: str
+    predictions: np.ndarray
+
+class MLTrader:
     """
-    Load data from a LIBSVM formatted file.
-
-    Args:
-        file_path (str): Path to the LIBSVM file.
-
-    Returns:
-        Tuple[np.ndarray, np.ndarray]: Features and labels as numpy arrays.
+    Neural Network-based trading model that handles data preprocessing,
+    model training, evaluation, and result storage.
     """
-    features: List[List[float]] = []
-    labels: List[float] = []
-    with open(file_path, 'r') as f:
-        for line in f:
-            parts: List[str] = line.strip().split()
-            labels.append(float(parts[0]))
-            feat: Dict[int, float] = {int(item.split(':')[0]): float(item.split(':')[1]) for item in parts[1:]}
-            features.append([feat.get(i, 0.) for i in range(1, max(feat.keys()) + 1)])
-    return np.array(features), np.array(labels)
 
-def train_model(X_train: np.ndarray, y_train: np.ndarray) -> MLPClassifier:
-    """
-    Train a Multi-Layer Perceptron Classifier.
+    def __init__(self, config: Optional[ModelConfig] = None):
+        """
+        Initialize the MLPTrader with configuration.
 
-    Args:
-        X_train (np.ndarray): Training features.
-        y_train (np.ndarray): Training labels.
+        Args:
+            config (ModelConfig, optional): Model configuration parameters.
+        """
+        self.config = config or ModelConfig()
+        self.model: Optional[MLPClassifier] = None
+        self.scaler: Optional[StandardScaler] = None
+        self._initialize_model()
 
-    Returns:
-        MLPClassifier: Trained model.
-    """
-    layers: List[int] = [20, 10, 8, 6, 5]
-    model = MLPClassifier(hidden_layer_sizes=layers, 
-                          max_iter=200, 
-                          random_state=1234, 
-                          batch_size=128)
-    model.fit(X_train, y_train)
-    return model
+    def _initialize_model(self) -> None:
+        """Initialize the MLPClassifier with configured parameters."""
+        self.model = MLPClassifier(
+            hidden_layer_sizes=self.config.hidden_layers,
+            max_iter=self.config.max_iterations,
+            random_state=self.config.random_state,
+            batch_size=self.config.batch_size
+        )
+        self.scaler = StandardScaler()
 
-def evaluate_model(model: MLPClassifier, X_test: np.ndarray, y_test: np.ndarray) -> Tuple[float, np.ndarray, str]:
-    """
-    Evaluate the trained model.
+    def load_data(self, file_path: str) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Load and parse data.
 
-    Args:
-        model (MLPClassifier): Trained model.
-        X_test (np.ndarray): Test features.
-        y_test (np.ndarray): Test labels.
+        Args:
+            file_path (str): Path to the file.
 
-    Returns:
-        Tuple[float, np.ndarray, str]: Accuracy, confusion matrix, and classification report.
-    """
-    predictions: np.ndarray = model.predict(X_test)
-    accuracy: float = accuracy_score(y_test, predictions)
-    cm: np.ndarray = confusion_matrix(y_test, predictions)
-    cr: str = classification_report(y_test, predictions, zero_division=1)
-    return accuracy, cm, cr, predictions
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Features and labels arrays.
 
-def save_results(y_test: np.ndarray, X_test: np.ndarray, predictions: np.ndarray) -> None:
-    """
-    Save the results to a CSV file.
+        Raises:
+            FileNotFoundError: If the specified file doesn't exist.
+            ValueError: If the file format is invalid.
+        """
+        try:
+            features: List[List[float]] = []
+            labels: List[float] = []
+            
+            with open(file_path, 'r') as f:
+                for line in f:
+                    parts = line.strip().split()
+                    labels.append(float(parts[0]))
+                    
+                    # Parse features
+                    feat_dict = {
+                        int(item.split(':')[0]): float(item.split(':')[1]) 
+                        for item in parts[1:]
+                    }
+                    features.append([
+                        feat_dict.get(i, 0.) 
+                        for i in range(1, max(feat_dict.keys()) + 1)
+                    ])
+                    
+            return np.array(features), np.array(labels)
+            
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Data file not found: {file_path}")
+        except Exception as e:
+            raise ValueError(f"Error parsing data file: {str(e)}")
 
-    Args:
-        y_test (np.ndarray): True labels.
-        X_test (np.ndarray): Test features.
-        predictions (np.ndarray): Predicted labels.
-    """
-    results = pd.DataFrame({
-        'label': y_test,
-        'features': [';'.join(map(str, feat)) for feat in X_test],
-        'prediction': predictions
-    })
-    results.to_csv("resources2/outputMLP.csv", index=False, sep=';', header=False)
+    def prepare_data(self, train_path: str, test_path: str) -> Tuple[
+        Tuple[np.ndarray, np.ndarray], 
+        Tuple[np.ndarray, np.ndarray]
+    ]:
+        """
+        Load and preprocess both training and test data.
 
-def phase_process() -> None:
-    """
-    Main function to process the data, train the model, evaluate it, and save results.
-    """
-    try:
-        # Load training and test data
-        X_train, y_train = load_libsvm("resources2/GATableListTraining.txt")
-        X_test, y_test = load_libsvm("resources2/GATableListTest.txt")
+        Args:
+            train_path (str): Path to training data file.
+            test_path (str): Path to test data file.
 
-        # Normalize features
-        scaler = StandardScaler()
-        X_train_scaled: np.ndarray = scaler.fit_transform(X_train)
-        X_test_scaled: np.ndarray = scaler.transform(X_test)
+        Returns:
+            Tuple containing:
+                - Training features and labels
+                - Test features and labels
+        """
+        # Load raw data
+        X_train, y_train = self.load_data(train_path)
+        X_test, y_test = self.load_data(test_path)
 
-        # Train the model
-        model: MLPClassifier = train_model(X_train_scaled, y_train)
+        # Scale features
+        X_train_scaled = self.scaler.fit_transform(X_train)
+        X_test_scaled = self.scaler.transform(X_test)
 
-        # Evaluate the model
-        accuracy, cm, cr, predictions = evaluate_model(model, X_test_scaled, y_test)
+        return (X_train_scaled, y_train), (X_test_scaled, y_test)
 
-        # Print results
-        print(f"Test set accuracy = {accuracy}")
-        print("Confusion matrix:")
-        print(cm)
-        print("Classification Report:")
-        print(cr)
+    def train(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
+        """
+        Train the neural network model.
 
-        # Save results
-        save_results(y_test, X_test, predictions)
+        Args:
+            X_train (np.ndarray): Training features.
+            y_train (np.ndarray): Training labels.
+        """
+        self.model.fit(X_train, y_train)
 
-    except Exception as e:
-        print(f"An error occurred: {str(e)}")
+    def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> ModelMetrics:
+        """
+        Evaluate model performance on test data.
 
-if __name__ == "__main__":
-    phase_process()
+        Args:
+            X_test (np.ndarray): Test features.
+            y_test (np.ndarray): True labels.
+
+        Returns:
+            ModelMetrics: Collection of evaluation metrics.
+        """
+        predictions = self.model.predict(X_test)
+        
+        return ModelMetrics(
+            accuracy=accuracy_score(y_test, predictions),
+            confusion_matrix=confusion_matrix(y_test, predictions),
+            classification_report=classification_report(y_test, predictions, zero_division=1),
+            predictions=predictions
+        )
+
+    def save_results(self, y_test: np.ndarray, X_test: np.ndarray, 
+                    predictions: np.ndarray, output_path: str) -> None:
+        """
+        Save prediction results to CSV file.
+
+        Args:
+            y_test (np.ndarray): True labels.
+            X_test (np.ndarray): Test features.
+            predictions (np.ndarray): Model predictions.
+            output_path (str): Path for output file.
+        """
+        results = pd.DataFrame({
+            'label': y_test,
+            'features': [';'.join(map(str, feat)) for feat in X_test],
+            'prediction': predictions
+        })
+        
+        results.to_csv(output_path, index=False, sep=';', header=False)
