@@ -1,5 +1,6 @@
 import csv
-from typing import List, Tuple
+import pandas as pd
+from typing import List
 from pathlib import Path
 
 class TestDataGenerator:
@@ -23,7 +24,7 @@ class TestDataGenerator:
         """
         self.input_path = Path(input_path)
         self.output_path = Path(output_path)
-        self.data: List[List[str]] = []
+        self.data: pd.DataFrame = pd.DataFrame()
         
     def process(self) -> None:
         """
@@ -46,12 +47,10 @@ class TestDataGenerator:
         technical indicators and SMA values.
         """
         try:
-            with open(self.input_path, 'r') as file:
-                csv_reader = csv.reader(file, delimiter=';')
-                self.data = [row for row in csv_reader]
+            self.data = pd.read_csv(self.input_path, sep=';', header=None)
         except IOError as e:
             print(f"Error reading input file: {e}")
-            self.data = []
+            self.data = pd.DataFrame()
             
     def _convert_to_testing_format(self) -> List[str]:
         """
@@ -66,12 +65,12 @@ class TestDataGenerator:
         formatted_data: List[str] = []
         
         for row_index in range(len(self.data)):
-            trend = self._get_trend_from_sma(self.data[row_index])
+            trend = self._get_trend_from_sma(self.data.iloc[row_index])
             
             # Process each indicator column (excluding price and SMAs)
-            for col_index in range(1, len(self.data[0]) - 2):
+            for col_index in range(1, len(self.data.columns) - 2):
                 formatted_line = self._format_testing_line(
-                    indicator_value=self.data[row_index][col_index],
+                    indicator_value=str(self.data.iloc[row_index, col_index]),
                     column_index=col_index,
                     trend=trend
                 )
@@ -79,12 +78,12 @@ class TestDataGenerator:
                 
         return formatted_data
     
-    def _get_trend_from_sma(self, row: List[str]) -> str:
+    def _get_trend_from_sma(self, row: pd.Series) -> str:
         """
         Calculate trend based on SMA50 and SMA200 values from a data row.
         
         Args:
-            row (List[str]): A row of data containing SMA values
+            row (pd.Series): A row of data containing SMA values
             
         Returns:
             str: "1.0" for uptrend (SMA50 > SMA200), "0.0" for downtrend
