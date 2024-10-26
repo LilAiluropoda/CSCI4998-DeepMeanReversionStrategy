@@ -1,7 +1,6 @@
 from phase1 import FeatureMaker
 from phase2 import TestDataGenerator
 from phase3 import ModelConfig, MLTrader
-from phase4 import phase_process as phase4_process
 from phase5 import phase_process as phase5_process
 from GA import GA
 from pathlib import Path
@@ -85,9 +84,8 @@ class Scheduler:
         # Save predictions
         trader.save_results(y_test, X_test, metrics.predictions, output_path)
 
-
         print("Phase4")
-        phase4_process(Scheduler.file_path_output_of_mlp, Scheduler.file_path_output_of_rsi_test)
+        trader.process_financial_predictions(metrics.predictions, Scheduler.file_path_output_of_rsi_test, "resources2/outputOfTestPrediction.txt")
 
         print("Phase5")
         phase5_process()

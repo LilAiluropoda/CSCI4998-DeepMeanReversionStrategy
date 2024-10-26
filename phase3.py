@@ -1,3 +1,4 @@
+import csv
 import numpy as np
 import pandas as pd
 from sklearn.neural_network import MLPClassifier
@@ -168,3 +169,51 @@ class MLTrader:
         })
         
         results.to_csv(output_path, index=False, sep=';', header=False)
+
+    def process_financial_predictions(
+        self, 
+        predictions: np.ndarray, 
+        rsi_test_path: str,
+        output_path: str
+        ) -> None:
+            """
+            Process predictions and RSI data to generate and save financial predictions.
+
+            Args:
+                predictions (np.ndarray): Model predictions
+                rsi_test_path (str): Path to RSI test data
+                output_path (str): Path for output file
+            """
+            # Read RSI test data
+            with open(rsi_test_path, 'r') as file:
+                rsi_test_data = list(csv.reader(file, delimiter=';'))
+
+            # Process predictions
+            builder: List[str] = []
+            counter_zeros, counter_ones, counter_twos = 0, 0, 0
+            row_price = 0
+
+            for n in range(len(predictions)):
+                if predictions[n] == 0:
+                    counter_zeros += 1
+                elif predictions[n] == 1:
+                    counter_ones += 1
+                elif predictions[n] == 2:
+                    counter_twos += 1
+
+                if (n + 1) % 20 == 0:
+                    if counter_zeros > 14:
+                        builder.append(f"{rsi_test_data[row_price][0]};0.0\n")
+                    elif counter_ones > 14:
+                        builder.append(f"{rsi_test_data[row_price][0]};1.0\n")
+                    elif counter_twos > 14:
+                        builder.append(f"{rsi_test_data[row_price][0]};2.0\n")
+                    else:
+                        builder.append(f"{rsi_test_data[row_price][0]};0.0\n")
+
+                    counter_zeros, counter_ones, counter_twos = 0, 0, 0
+                    row_price += 1
+
+            # Write results
+            with open(output_path, "w") as writer:
+                writer.writelines(builder)

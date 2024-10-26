@@ -62,6 +62,19 @@ class TestDataGenerator:
         Format:
             Each line: "5 1:{indicator_value} 2:{column_index} 3:{trend}"
         """
+        def _format_testing_line(indicator_value: str, column_index: int, trend: str) -> str:
+            """
+            Format a single line of testing data.
+            
+            Args:
+                indicator_value (str): The technical indicator value
+                column_index (int): The index of the indicator column
+                trend (str): The calculated trend value
+                
+            Returns:
+                str: Formatted line for testing data file
+            """
+            return f"5 1:{indicator_value} 2:{column_index} 3:{trend}\n"
         formatted_data: List[str] = []
         
         for row_index in range(len(self.data)):
@@ -69,7 +82,7 @@ class TestDataGenerator:
             
             # Process each indicator column (excluding price and SMAs)
             for col_index in range(1, len(self.data.columns) - 2):
-                formatted_line = self._format_testing_line(
+                formatted_line = _format_testing_line(
                     indicator_value=str(self.data.iloc[row_index, col_index]),
                     column_index=col_index,
                     trend=trend
@@ -91,20 +104,6 @@ class TestDataGenerator:
         sma50 = float(row[21])
         sma200 = float(row[22])
         return "1.0" if sma50 - sma200 > 0 else "0.0"
-    
-    def _format_testing_line(self, indicator_value: str, column_index: int, trend: str) -> str:
-        """
-        Format a single line of testing data.
-        
-        Args:
-            indicator_value (str): The technical indicator value
-            column_index (int): The index of the indicator column
-            trend (str): The calculated trend value
-            
-        Returns:
-            str: Formatted line for testing data file
-        """
-        return f"5 1:{indicator_value} 2:{column_index} 3:{trend}\n"
     
     def _write_output_file(self, data: List[str]) -> None:
         """
