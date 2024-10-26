@@ -59,7 +59,7 @@ class DataLoader:
             print(f"An error occurred while processing the file: {e}")
             return pd.DataFrame()
   
-    def format_output(self, df: pd.DataFrame) -> List[str]:
+    def format_stock_data(self, df: pd.DataFrame) -> List[str]:
         """
         Formats DataFrame into semicolon-separated strings for output.
         
@@ -84,7 +84,7 @@ class DataLoader:
             print(f"counterRow: {index + 1}")
         return output_rows
     
-    def write_output(self, output_rows: List[str], output_file_path: str) -> None:
+    def write_stock_data(self, output_rows: List[str], output_file_path: str) -> None:
         """
         Writes formatted output rows to a file.
         
@@ -201,7 +201,7 @@ class TechnicalIndicatorCalculator:
             df[f'sma{period}'] = [sma_indicator.calculate(j) for j in range(len(df))]
         return df
 
-class FeatureProcessor:
+class FeatureMaker:
     """
     Orchestrates the complete feature processing workflow for stock market data.
     
@@ -240,5 +240,5 @@ class FeatureProcessor:
             return
         
         df = self.indicator_calculator.calculate_features(df, features, custom_params)
-        output_rows: List[str] = self.data_loader.format_output(df)
-        self.data_loader.write_output(output_rows, output_file_path)
+        output_rows: List[str] = self.data_loader.format_stock_data(df)
+        self.data_loader.write_stock_data(output_rows, output_file_path)

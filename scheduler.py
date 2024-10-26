@@ -1,4 +1,4 @@
-from phase1 import FeatureProcessor
+from phase1 import FeatureMaker
 from phase2 import phase_process as phase2_process
 from phase3 import phase_process as phase3_process
 from phase4 import phase_process as phase4_process
@@ -23,7 +23,7 @@ class Scheduler:
 
     @staticmethod
     def main():
-        processor = FeatureProcessor()
+        processor = FeatureMaker()
         
         custom_params = {
             'rsi': {'periods': range(1, 21)},
