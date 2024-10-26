@@ -1,4 +1,3 @@
-import csv
 import pandas as pd
 from typing import List
 from pathlib import Path
