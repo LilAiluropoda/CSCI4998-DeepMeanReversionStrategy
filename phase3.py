@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from sklearn.preprocessing import StandardScaler
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Union
 from dataclasses import dataclass
 
 @dataclass
@@ -13,11 +13,13 @@ class ModelConfig:
     hidden_layers: List[int] = None
     max_iterations: int = 200
     random_state: int = 1234
-    batch_size: int = 128
+    batch_size: Union[int, str] = "auto"
+    activation: str = "logistic"
+    solver: str = "lbfgs"
 
     def __post_init__(self):
         if self.hidden_layers is None:
-            self.hidden_layers = [3, 20, 10, 8, 6, 5, 3]
+            self.hidden_layers = [20, 10, 8, 6, 5]
 
 @dataclass
 class ModelMetrics:
@@ -48,6 +50,9 @@ class MLTrader:
     def _initialize_model(self) -> None:
         """Initialize the MLPClassifier with configured parameters."""
         self.model = MLPClassifier(
+            tol=1e-6,
+            solver=self.config.solver,
+            activation=self.config.activation,
             hidden_layer_sizes=self.config.hidden_layers,
             max_iter=self.config.max_iterations,
             random_state=self.config.random_state,

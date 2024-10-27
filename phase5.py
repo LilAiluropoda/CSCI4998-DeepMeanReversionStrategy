@@ -125,8 +125,9 @@ class BackTestReportGenerator:
     @staticmethod
     def display_results(results: List[List[Any]]):
         headers = [
-            "Company", "GA Return ($)", "Rtn % (%)", "Ann.#ofT (Deals)", "Success % (%)", 
-            "ApT (%)", "L (Days)", "MpT (%)", "MLT (%)", "MxC ($)", "MinC ($)", "IR (%)"
+            "Company", "GA + MLP Return ($)", "Rtn % (%)", "Ann.#ofT (Deals)", 
+                "Success % (%)", "ApT (%)", "L (Days)", "MpT (%)", "MLT (%)", 
+                "MxC ($)", "MinC ($)", "IR (%)"
         ]
         print(tabulate(results, headers=headers, tablefmt="grid"))
 

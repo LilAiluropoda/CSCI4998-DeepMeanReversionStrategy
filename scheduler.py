@@ -9,7 +9,7 @@ class Scheduler:
     CREATE_TEST_FILE = 0
     CALCULATE = 1
 
-    company = "APPL"
+    company = "MSFT"
     mode = CREATE_TEST_FILE
     input_file_path_phase1 = f"resources2/{company}19972007.csv" # Change the path to file here
     input_file_path_phase1_test = f"resources2/{company}20072017.csv" # Change the path to file here
@@ -58,7 +58,7 @@ class Scheduler:
             hidden_layers=[20, 10, 8, 6, 5],
             max_iterations=200,
             random_state=1234,
-            batch_size=128
+            batch_size="auto"
         )
         
         # Initialize MLTrader
