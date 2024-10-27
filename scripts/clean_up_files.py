@@ -1,6 +1,7 @@
 import os
 import shutil
 
+
 def cleanup_files():
     """
     Delete specified files from resources2 folder.
