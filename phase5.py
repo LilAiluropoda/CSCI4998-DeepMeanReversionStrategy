@@ -93,43 +93,47 @@ class Backtester:
         return (data.loc[len(data)-1, 'price'] * share_number_bah) - 1.0
 
 class BackTestReportGenerator:
-    """Handles report generation and result display."""
+    """Handles report generation and result display for a single company."""
 
     @staticmethod
-    def generate_report(stats: TransactionStats, money_bah: float, data_length: int, company: str) -> List[Any]:
+    def generate_report(stats: TransactionStats, money_bah: float, data_length: int, company: str) -> Dict[str, float]:
+        """
+        Generates a comprehensive report for a single company's trading performance.
+        
+        Returns:
+            Dict containing all calculated metrics
+        """
         number_of_years: float = (data_length - 1) / 365
-        annualized_return = ((math.exp(math.log(stats.money/10000.0)/number_of_years)-1)*100)
-        ann_num_transactions = stats.transaction_count / number_of_years
-        percent_success = (stats.success_transaction_count / stats.transaction_count) * 100
-        avg_profit_per_transaction = (stats.total_percent_profit / stats.transaction_count) * 100
-        avg_transaction_length = stats.total_transaction_length / stats.transaction_count
-        max_profit_percent = (stats.maximum_gain / stats.money) * 100
-        max_loss_percent = (stats.maximum_lost / stats.money) * 100
-        idle_ratio = ((data_length - stats.total_transaction_length) / data_length) * 100
-
-        return [
-            company,
-            round(stats.money, 2),
-            round(annualized_return, 2),
-            round(ann_num_transactions, 1),
-            round(percent_success, 2),
-            round(avg_profit_per_transaction, 2),
-            round(avg_transaction_length),
-            round(max_profit_percent, 2),
-            round(max_loss_percent, 2),
-            round(stats.maximum_money, 2),
-            round(stats.minimum_money, 2),
-            round(idle_ratio, 2)
-        ]
+        metrics = {
+            "Company": company,
+            "Final Return ($)": round(stats.money, 2),
+            "Annualized Return (%)": round(((math.exp(math.log(stats.money/10000.0)/number_of_years)-1)*100), 2),
+            "Annual Transactions": round(stats.transaction_count / number_of_years, 1),
+            "Success Rate (%)": round((stats.success_transaction_count / stats.transaction_count) * 100, 2),
+            "Avg Profit per Trade (%)": round((stats.total_percent_profit / stats.transaction_count) * 100, 2),
+            "Avg Trade Length (Days)": round(stats.total_transaction_length / stats.transaction_count),
+            "Max Profit per Trade (%)": round((stats.maximum_gain / stats.money) * 100, 2),
+            "Max Loss per Trade (%)": round((stats.maximum_lost / stats.money) * 100, 2),
+            "Maximum Capital ($)": round(stats.maximum_money, 2),
+            "Minimum Capital ($)": round(stats.minimum_money, 2),
+            "Idle Ratio (%)": round(((data_length - stats.total_transaction_length) / data_length) * 100, 2)
+        }
+        return metrics
 
     @staticmethod
-    def display_results(results: List[List[Any]]):
-        headers = [
-            "Company", "GA + MLP Return ($)", "Rtn % (%)", "Ann.#ofT (Deals)", 
-                "Success % (%)", "ApT (%)", "L (Days)", "MpT (%)", "MLT (%)", 
-                "MxC ($)", "MinC ($)", "IR (%)"
-        ]
-        print(tabulate(results, headers=headers, tablefmt="grid"))
+    def display_results(metrics: Dict[str, float]):
+        """Displays trading results in a formatted table."""
+        results = [[k, v] for k, v in metrics.items()]
+        print("\n=== Trading Performance Report ===")
+        print(tabulate(results, headers=["Metric", "Value"], tablefmt="grid"))
+
+    @staticmethod
+    def save_results(metrics: Dict[str, float]):
+        """Saves trading results to a file."""
+        results = [[k, v] for k, v in metrics.items()]
+        with open("resources2/Results.txt", "w") as writer:
+            writer.write("=== Trading Performance Report ===\n")
+            writer.write(tabulate(results, headers=["Metric", "Value"], tablefmt="grid"))
 
 class Visualizer:
     """Handles visualization of trading decisions."""
@@ -272,9 +276,9 @@ class Visualizer:
         plt.close()
 
 class TradingSystem:
-    """Main trading system that coordinates all operations."""
+    """Main trading system that coordinates all operations for a single company."""
 
-    def __init__(self, company):
+    def __init__(self, company: str):
         self.company = company
         self.data_loader = DataLoader()
         self.backtester = Backtester()
@@ -282,27 +286,30 @@ class TradingSystem:
         self.visualizer = Visualizer()
 
     def run(self):
-        fname: str = "resources2/outputOfTestPrediction.txt"
-        companies = [self.company]
-        results = []
-
-        for company in companies:
+        """Executes the complete trading analysis process."""
+        try:
+            # Load and process data
+            fname: str = "resources2/outputOfTestPrediction.txt"
             data = self.data_loader.read_csv_file(fname)
-            stats = self.backtester.process_transactions(data, company)
+            
+            # Perform backtesting
+            stats = self.backtester.process_transactions(data, self.company)
             money_bah = self.backtester.calculate_bah(data)
-            result = self.report_generator.generate_report(stats, money_bah, len(data), company)
-            results.append(result)
-            # self.visualizer.visualize_trading_decisions(data, company)
+            
+            # Generate and display results
+            metrics = self.report_generator.generate_report(
+                stats, money_bah, len(data), self.company
+            )
+            self.report_generator.display_results(metrics)
+            self.report_generator.save_results(metrics)
+            
+            # Visualize trading decisions
+            self.visualizer.visualize_trading_decisions(data, self.company)
+            
+            print(f"\nAnalysis completed successfully for {self.company}")
+            print("Results have been saved to 'resources2/Results.txt'")
+            print(f"Trading visualization has been saved as 'resources2/trading_decisions_{self.company}.png'")
+            
+        except Exception as e:
+            print(f"Error during analysis: {str(e)}")
 
-        self.report_generator.display_results(results)
-
-        with open("resources2/Results.txt", "w") as writer:
-            writer.write(tabulate(results, headers=[
-                "Company", "GA + MLP Return ($)", "Rtn % (%)", "Ann.#ofT (Deals)", 
-                "Success % (%)", "ApT (%)", "L (Days)", "MpT (%)", "MLT (%)", 
-                "MxC ($)", "MinC ($)", "IR (%)"
-            ], tablefmt="grid"))
-
-if __name__ == "__main__":
-    trading_system = TradingSystem()
-    trading_system.run()
