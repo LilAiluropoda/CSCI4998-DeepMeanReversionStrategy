@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import math
+import os
 from typing import List, Tuple, Dict, Any
 from dataclasses import dataclass
 from tabulate import tabulate
@@ -104,19 +105,37 @@ class BackTestReportGenerator:
             Dict containing all calculated metrics
         """
         number_of_years: float = (data_length - 1) / 365
+        
+        # Calculate BaH metrics
+        bah_return = money_bah - 10000.0
+        bah_return_pct = (money_bah / 10000.0 - 1) * 100
+        bah_annual_return = ((math.exp(math.log(money_bah/10000.0)/number_of_years)-1)*100)
+        
+        # Calculate strategy metrics
+        strategy_return_pct = (stats.money / 10000.0 - 1) * 100
+        strategy_annual_return = ((math.exp(math.log(stats.money/10000.0)/number_of_years)-1)*100)
+        outperformance = strategy_return_pct - bah_return_pct
+        annual_outperformance = strategy_annual_return - bah_annual_return
+        
         metrics = {
             "Company": company,
-            "Final Return ($)": round(stats.money, 2),
-            "Annualized Return (%)": round(((math.exp(math.log(stats.money/10000.0)/number_of_years)-1)*100), 2),
-            "Annual Transactions": round(stats.transaction_count / number_of_years, 1),
-            "Success Rate (%)": round((stats.success_transaction_count / stats.transaction_count) * 100, 2),
-            "Avg Profit per Trade (%)": round((stats.total_percent_profit / stats.transaction_count) * 100, 2),
-            "Avg Trade Length (Days)": round(stats.total_transaction_length / stats.transaction_count),
-            "Max Profit per Trade (%)": round((stats.maximum_gain / stats.money) * 100, 2),
-            "Max Loss per Trade (%)": round((stats.maximum_lost / stats.money) * 100, 2),
-            "Maximum Capital ($)": round(stats.maximum_money, 2),
-            "Minimum Capital ($)": round(stats.minimum_money, 2),
-            "Idle Ratio (%)": round(((data_length - stats.total_transaction_length) / data_length) * 100, 2)
+            "Final_Return": round(stats.money, 2),
+            "Final_Return_Pct": round(strategy_return_pct, 2),
+            "Annualized_Return": round(strategy_annual_return, 2),
+            "BaH_Final_Return": round(money_bah, 2),
+            "BaH_Return_Pct": round(bah_return_pct, 2),
+            "BaH_Annualized_Return": round(bah_annual_return, 2),
+            "Strategy_Outperformance": round(outperformance, 2),
+            "Annual_Outperformance": round(annual_outperformance, 2),
+            "Annual_Transactions": round(stats.transaction_count / number_of_years, 1),
+            "Success_Rate": round((stats.success_transaction_count / stats.transaction_count) * 100, 2),
+            "Avg_Profit_per_Trade": round((stats.total_percent_profit / stats.transaction_count) * 100, 2),
+            "Avg_Trade_Length": round(stats.total_transaction_length / stats.transaction_count),
+            "Max_Profit_per_Trade": round((stats.maximum_gain / stats.money) * 100, 2),
+            "Max_Loss_per_Trade": round((stats.maximum_lost / stats.money) * 100, 2),
+            "Maximum_Capital": round(stats.maximum_money, 2),
+            "Minimum_Capital": round(stats.minimum_money, 2),
+            "Idle_Ratio": round(((data_length - stats.total_transaction_length) / data_length) * 100, 2)
         }
         return metrics
 
@@ -129,11 +148,27 @@ class BackTestReportGenerator:
 
     @staticmethod
     def save_results(metrics: Dict[str, float]):
-        """Saves trading results to a file."""
-        results = [[k, v] for k, v in metrics.items()]
-        with open("resources2/Results.txt", "w") as writer:
-            writer.write("=== Trading Performance Report ===\n")
-            writer.write(tabulate(results, headers=["Metric", "Value"], tablefmt="grid"))
+        """Saves trading results to a CSV file, appending if file exists."""
+        results_file = "resources2/Results.csv"
+        
+        # Convert metrics to DataFrame
+        df_new = pd.DataFrame([metrics])
+        
+        try:
+            # Try to read existing CSV file
+            if os.path.exists(results_file):
+                df_existing = pd.read_csv(results_file)
+                # Append new results
+                df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+            else:
+                df_combined = df_new
+            
+            # Save to CSV
+            df_combined.to_csv(results_file, index=False)
+            print(f"Results appended to {results_file}")
+            
+        except Exception as e:
+            print(f"Error saving results to CSV: {str(e)}")
 
 class Visualizer:
     """Handles visualization of trading decisions."""
@@ -300,11 +335,11 @@ class TradingSystem:
             metrics = self.report_generator.generate_report(
                 stats, money_bah, len(data), self.company
             )
-            self.report_generator.display_results(metrics)
+            # self.report_generator.display_results(metrics)
             self.report_generator.save_results(metrics)
             
             # Visualize trading decisions
-            self.visualizer.visualize_trading_decisions(data, self.company)
+            # self.visualizer.visualize_trading_decisions(data, self.company)
             
             print(f"\nAnalysis completed successfully for {self.company}")
             print("Results have been saved to 'resources2/Results.txt'")

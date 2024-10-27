@@ -81,7 +81,6 @@ class DataLoader:
                 f"{row['sma200']:.2f}"
             ]
             output_rows.append(';'.join(output_row))
-            print(f"counterRow: {index + 1}")
         return output_rows
     
     def write_stock_data(self, output_rows: List[str], output_file_path: str) -> None:
