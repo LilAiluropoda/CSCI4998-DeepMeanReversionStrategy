@@ -9,7 +9,7 @@ class Scheduler:
     CREATE_TEST_FILE = 0
     CALCULATE = 1
 
-    company = "JNJ"
+    company = "APPL"
     mode = CREATE_TEST_FILE
     input_file_path_phase1 = f"resources2/{company}19972007.csv" # Change the path to file here
     input_file_path_phase1_test = f"resources2/{company}20072017.csv" # Change the path to file here

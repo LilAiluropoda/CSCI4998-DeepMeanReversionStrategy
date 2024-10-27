@@ -17,7 +17,7 @@ class ModelConfig:
 
     def __post_init__(self):
         if self.hidden_layers is None:
-            self.hidden_layers = [20, 10, 8, 6, 5]
+            self.hidden_layers = [3, 20, 10, 8, 6, 5, 3]
 
 @dataclass
 class ModelMetrics:
@@ -116,8 +116,10 @@ class MLTrader:
         X_test, y_test = self.load_data(test_path)
 
         # Scale features
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_test_scaled = self.scaler.transform(X_test)
+        X_train_scaled = X_train
+        X_test_scaled = X_test
+        # X_train_scaled = self.scaler.fit_transform(X_train)
+        # X_test_scaled = self.scaler.transform(X_test)
 
         return (X_train_scaled, y_train), (X_test_scaled, y_test)
 
