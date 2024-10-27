@@ -339,7 +339,7 @@ class TradingSystem:
             self.report_generator.save_results(metrics)
             
             # Visualize trading decisions
-            # self.visualizer.visualize_trading_decisions(data, self.company)
+            self.visualizer.visualize_trading_decisions(data, self.company)
             
             print(f"\nAnalysis completed successfully for {self.company}")
             print("Results have been saved to 'resources2/Results.txt'")
