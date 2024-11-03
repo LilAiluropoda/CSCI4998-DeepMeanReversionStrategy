@@ -94,7 +94,7 @@ class Scheduler:
     
     # List of company tickers
     COMPANIES = [
-        'AAPL'
+        'DIS'
     ]
     
     # List of files to clean up after each run

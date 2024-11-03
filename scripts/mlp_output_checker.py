@@ -53,7 +53,7 @@ def compare_predictions(file1_path: str, file2_path: str) -> None:
     print("-" * 70)
 
 if __name__ == "__main__":
-    origin_path = r"C:\Users\Steve\Desktop\Projects\fyp\resources2\AAPL\outputMLP.csv\part-00000-4fc0ebb7-d005-4b74-b6b1-b6a77ae65166.csv"   # Update with actual path
+    origin_path = r"C:\Users\Steve\Desktop\Projects\fyp\resources2\DIS\outputMLP.csv\part-00000-44d6a1fd-6819-46bd-8da1-84eec0239e2c.csv"   # Update with actual path
     new_path = r"C:\\Users\\Steve\\Desktop\\Projects\\fyp\\resources2\\outputMLP.csv"  # Update with actual path
     
     try:
