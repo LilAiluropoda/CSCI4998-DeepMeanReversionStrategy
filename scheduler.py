@@ -94,18 +94,11 @@ class Scheduler:
     
     # List of company tickers
     COMPANIES = [
-        'AAPL', 'AXP', 'BA', 'CAT', 'CSCO', 'CVX', 'DD', 'DIS', 'GE', 'GS',
-        'HD', 'IBM', 'INTC', 'JNJ', 'JPM', 'KO', 'MCD', 'MMM', 'MRK', 'MSFT',
-        'NKE', 'PFE', 'PG', 'TRV', 'UNH', 'UTX', 'VZ', 'WMT', 'XOM'
+        'AAPL'
     ]
     
     # List of files to clean up after each run
     CLEANUP_FILES = [
-        'output.csv',
-        'outputMLP.csv',
-        'GATableListTest.txt',
-        'GATableListTraining.txt',
-        'outputOfTestPrediction.txt'
     ]
     
     mode = CREATE_TEST_FILE
