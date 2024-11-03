@@ -6,7 +6,6 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 from sklearn.preprocessing import StandardScaler
 from typing import Tuple, List, Optional, Union
 from dataclasses import dataclass
-from scipy.special import softmax
 import numpy as np
 
 @dataclass
@@ -103,69 +102,28 @@ class MLTrader:
         except Exception as e:
             raise ValueError(f"Error parsing data file: {str(e)}")
 
-    def one_hot_encode(self, features: np.ndarray) -> np.ndarray:
+    def one_hot_encode(self, labels: np.ndarray) -> np.ndarray:
         """
-        Apply one-hot encoding to features following Spark's implementation.
-        
+        Convert labels to one-hot encoded format.
+
         Args:
-            features (np.ndarray): Input features array
-            
+            labels (np.ndarray): Input labels to encode
+
         Returns:
-            np.ndarray: One-hot encoded features
+            np.ndarray: One-hot encoded labels
         """
-        # Validate input values
-        if np.any(features < 0):
-            raise ValueError("Negative values found. Input can't be negative.")
-        if not np.all(np.equal(np.mod(features, 1), 0)):
-            raise ValueError("Values must be indices (integers).")
-        if np.any(features > np.iinfo(np.int32).max):
-            raise ValueError(f"OneHotEncoder only supports up to {np.iinfo(np.int32).max} indices.")
-
-        n_samples = features.shape[0]
-        encoded_features = []
+        # Get number of unique classes
+        n_classes = len(np.unique(labels))
         
-        # Process each feature column
-        for col_idx in range(features.shape[1]):
-            col_data = features[:, col_idx]
-            category_size = self.category_sizes[col_idx]
-            
-            # Determine the size of the encoded vector
-            if self.get_drop_last() and not self.keep_invalid():
-                output_size = category_size - 1
-            elif not self.get_drop_last() and self.keep_invalid():
-                output_size = category_size + 1
-            else:
-                output_size = category_size
-                
-            # Create encoded column
-            encoded_col = np.zeros((n_samples, output_size))
-            
-            for i in range(n_samples):
-                idx = int(col_data[i])
-                if idx >= 0 and idx < category_size:
-                    if idx < output_size:  # Only set 1 if idx is within output size
-                        encoded_col[i, idx] = 1.0
-                else:
-                    if self.keep_invalid():
-                        if not self.get_drop_last():
-                            encoded_col[i, -1] = 1.0  # Set last position for invalid
-                    else:
-                        raise ValueError(f"Unseen value: {idx}. To handle unseen values, "
-                                    "set handle_invalid to 'keep'.")
-            
-            encoded_features.append(encoded_col)
+        # Create zero matrix of shape (n_samples, n_classes)
+        one_hot = np.zeros((len(labels), n_classes))
         
-        # Concatenate all encoded features
-        return np.hstack(encoded_features)
-
-    def keep_invalid(self) -> bool:
-        """Check if invalid values should be kept."""
-        return self.config.handle_invalid == "keep"
-
-    def get_drop_last(self) -> bool:
-        """Get dropLast parameter value."""
-        return self.config.drop_last
-
+        # Set appropriate indices to 1
+        for i, label in enumerate(labels):
+            one_hot[i, int(label)] = 1
+            
+        return one_hot
+    
     def prepare_data(self, train_path: str, test_path: str) -> Tuple[
         Tuple[np.ndarray, np.ndarray], 
         Tuple[np.ndarray, np.ndarray]
@@ -187,18 +145,9 @@ class MLTrader:
         X_test, y_test = self.load_data(test_path)
 
         # Apply one-hot encoding
-        X_train_encoded = self.one_hot_encode(X_train)
-        X_test_encoded = self.one_hot_encode(X_test)
+        y_train_encoded = self.one_hot_encode(y_train)
 
-        # Scale features if needed
-        if self.scaler is not None:
-            X_train_scaled = self.scaler.fit_transform(X_train_encoded)
-            X_test_scaled = self.scaler.transform(X_test_encoded)
-        else:
-            X_train_scaled = X_train_encoded
-            X_test_scaled = X_test_encoded
-
-        return (X_train_scaled, y_train), (X_test_scaled, y_test)
+        return (X_train, y_train_encoded), (X_test, y_test)
     
     def train(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
         """
