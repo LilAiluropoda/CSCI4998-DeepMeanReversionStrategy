@@ -6,13 +6,12 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 from sklearn.preprocessing import StandardScaler
 from typing import Tuple, List, Optional, Union
 from dataclasses import dataclass
-import numpy as np
 
 @dataclass
 class ModelConfig:
     """Configuration parameters for the neural network model."""
     hidden_layers: List[int] = None
-    max_iterations: int = 200
+    max_iterations: int = 260
     random_state: int = 1234
     batch_size: Union[int, str] = "auto"
     activation: str = "logistic"
@@ -57,8 +56,7 @@ class MLTrader:
             hidden_layer_sizes=self.config.hidden_layers,
             max_iter=self.config.max_iterations,
             random_state=self.config.random_state,
-            batch_size=self.config.batch_size,
-            alpha=0.0
+            batch_size=self.config.batch_size
         )
         self.scaler = StandardScaler()
 
@@ -102,28 +100,6 @@ class MLTrader:
         except Exception as e:
             raise ValueError(f"Error parsing data file: {str(e)}")
 
-    def one_hot_encode(self, labels: np.ndarray) -> np.ndarray:
-        """
-        Convert labels to one-hot encoded format.
-
-        Args:
-            labels (np.ndarray): Input labels to encode
-
-        Returns:
-            np.ndarray: One-hot encoded labels
-        """
-        # Get number of unique classes
-        n_classes = len(np.unique(labels))
-        
-        # Create zero matrix of shape (n_samples, n_classes)
-        one_hot = np.zeros((len(labels), n_classes))
-        
-        # Set appropriate indices to 1
-        for i, label in enumerate(labels):
-            one_hot[i, int(label)] = 1
-            
-        return one_hot
-    
     def prepare_data(self, train_path: str, test_path: str) -> Tuple[
         Tuple[np.ndarray, np.ndarray], 
         Tuple[np.ndarray, np.ndarray]
@@ -144,11 +120,14 @@ class MLTrader:
         X_train, y_train = self.load_data(train_path)
         X_test, y_test = self.load_data(test_path)
 
-        # Apply one-hot encoding
-        y_train_encoded = self.one_hot_encode(y_train)
+        # Scale features
+        X_train_scaled = X_train
+        X_test_scaled = X_test
+        # X_train_scaled = self.scaler.fit_transform(X_train)
+        # X_test_scaled = self.scaler.transform(X_test)
 
-        return (X_train, y_train_encoded), (X_test, y_test)
-    
+        return (X_train_scaled, y_train), (X_test_scaled, y_test)
+
     def train(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
         """
         Train the neural network model.
@@ -161,7 +140,7 @@ class MLTrader:
 
     def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> ModelMetrics:
         """
-        Evaluate model performance on test data using probability-based predictions.
+        Evaluate model performance on test data.
 
         Args:
             X_test (np.ndarray): Test features.
@@ -170,14 +149,7 @@ class MLTrader:
         Returns:
             ModelMetrics: Collection of evaluation metrics.
         """
-        # Get probability predictions for each class
-        probabilities = self.model.predict_proba(X_test)
-        
-        # Apply custom softmax
-        softmax_probabilities = self.custom_softmax(probabilities)
-        
-        # Get predicted labels from probabilities
-        predictions = np.argmax(softmax_probabilities, axis=1)
+        predictions = self.model.predict(X_test)
         
         return ModelMetrics(
             accuracy=accuracy_score(y_test, predictions),
@@ -185,34 +157,6 @@ class MLTrader:
             classification_report=classification_report(y_test, predictions, zero_division=1),
             predictions=predictions
         )
-
-    def custom_softmax(self, data: np.ndarray) -> np.ndarray:
-        """
-        Implementation of softmax function based on the provided Scala code.
-        
-        Args:
-            data (np.ndarray): Input data of shape (n_samples, n_classes)
-            
-        Returns:
-            np.ndarray: Softmax probabilities of same shape as input
-        """
-        output = np.zeros_like(data)
-        
-        # Process each sample
-        for j in range(data.shape[1]):  # for each column
-            # Find max value for numerical stability
-            max_val = np.max(data[:, j])
-            
-            # Compute exp(x - max) for each value
-            exp_vals = np.exp(data[:, j] - max_val)
-            
-            # Compute sum of exponentials
-            sum_exp = np.sum(exp_vals)
-            
-            # Normalize by dividing by sum
-            output[:, j] = exp_vals / sum_exp
-        
-        return output
 
     def save_results(self, y_test: np.ndarray, X_test: np.ndarray, 
                     predictions: np.ndarray, output_path: str) -> None:
