@@ -4,6 +4,7 @@ from app.algorithm.MLPTrader import ModelConfig, MLTrader
 from app.backtesting.backtest_system import TradingSystem
 from app.algorithm.GA import GA
 from app.visualization.backtest_stat import BackTestStatisticVisualizer
+from app.data.datahelper import DataLoader, TrainTestSplitter
 from pathlib import Path
 import shutil
 import os
@@ -16,9 +17,7 @@ class Scheduler:
     CALCULATE = 1
     
     COMPANIES = [
-            'AAPL', 'AXP', 'BA', 'CAT', 'CSCO', 'CVX', 'DD', 'DIS', 'GE', 'GS',
-            'HD', 'IBM', 'INTC', 'JNJ', 'JPM', 'KO', 'MCD', 'MMM', 'MRK', 'MSFT',
-            'NKE', 'PFE', 'PG', 'TRV', 'UNH', 'UTX', 'VZ', 'WMT', 'XOM'
+            'JPM'
     ]
 
     CLEANUP_FILES = [
@@ -36,8 +35,7 @@ class Scheduler:
         source_dir = PathConfig.get_company_dir(company)
         
         files_to_copy = [
-            f"{company}19972007.csv",
-            f"{company}20072017.csv"
+            f"{company}19972017.csv"
         ]
         
         for file_name in files_to_copy:
@@ -88,71 +86,95 @@ class Scheduler:
     def process_company(company):
         print(f"\nProcessing company: {company}")
         
-        # Phase 0 + 1: Feature Processing
-        processor = FeatureMaker()
-        custom_params = {
-            'rsi': {'periods': range(1, 21)},
-            'sma': {'periods': [50, 200]}
-        }
+        # Process for each year from 1997 to 2012
+        for start_year in range(1997, 2013):
+            print(f"\n{'*'*30}")
+            print(f"Processing year: {start_year}")
+            print(f"{'*'*30}")
+            
+            # Phase 0 + 1: Feature Processing
+            processor = FeatureMaker()
+            custom_params = {
+                'rsi': {'periods': range(1, 21)},
+                'sma': {'periods': [50, 200]}
+            }
 
-        print("Phase 0 + 1: Processing features")
-        processor.run_analysis(
-            input_file_path=str(PathConfig.get_company_test_file(company)),
-            output_file_path=str(PathConfig.OUTPUT_CSV),
-            features=['rsi', 'sma'],
-            custom_params=custom_params
-        )
+            # Split data with 4 years training, 1 year testing
+            data_splitter = TrainTestSplitter()
+            data_splitter.save_split_data(
+                company_ticker=company,
+                start_year=start_year,
+                train_years=4,
+                test_years=1
+            )
 
-        # Phase 2: Generate test data
-        print("Phase 2: Generating test data")
-        test_data_getter = TestDataGenerator(
-            str(PathConfig.OUTPUT_CSV),
-            str(PathConfig.GA_TEST_LIST)
-        )
-        test_data_getter.process()
+            print("Phase 0 + 1: Processing features")
+            processor.run_analysis(
+                input_file_path=str(PathConfig.get_company_test_file(company)),
+                output_file_path=str(PathConfig.OUTPUT_CSV),
+                features=['rsi', 'sma'],
+                custom_params=custom_params
+            )
 
-        # Generate training data using GA
-        print("Phase 2.5: Generating training data using GA")
-        if not Scheduler.run_ga(company):
-            raise Exception("Failed to generate training data using GA")
+            # Phase 2: Generate test data
+            print("Phase 2: Generating test data")
+            test_data_getter = TestDataGenerator(
+                str(PathConfig.OUTPUT_CSV),
+                str(PathConfig.GA_TEST_LIST)
+            )
+            test_data_getter.process()
 
-        # Phase 3: Train and evaluate model
-        print("Phase 3: Training and evaluating model")
-        config = ModelConfig(
-            hidden_layers=[20, 10, 8, 6, 5],
-            max_iterations=260,
-            random_state=1234,
-            batch_size="auto"
-        )
-        
-        trader = MLTrader(config)
-        (X_train, y_train), (X_test, y_test) = trader.prepare_data(
-            str(PathConfig.GA_TRAINING_LIST),
-            str(PathConfig.GA_TEST_LIST)
-        )
-        trader.train(X_train, y_train)
-        metrics = trader.evaluate(X_test, y_test)
+            # Generate training data using GA
+            print("Phase 2.5: Generating training data using GA")
+            if not Scheduler.run_ga(company):
+                print(f"Failed to generate training data using GA for year {start_year}")
+                continue
 
-        print(f"Test set accuracy = {metrics.accuracy}")
-        print("\nConfusion matrix:")
-        print(metrics.confusion_matrix)
-        print("\nClassification Report:")
-        print(metrics.classification_report)
+            # Phase 3: Train and evaluate model
+            print("Phase 3: Training and evaluating model")
+            config = ModelConfig(
+                hidden_layers=[20, 10, 8, 6, 5],
+                max_iterations=260,
+                random_state=1234,
+                batch_size="auto"
+            )
+            
+            trader = MLTrader(config)
+            try:
+                (X_train, y_train), (X_test, y_test) = trader.prepare_data(
+                    str(PathConfig.GA_TRAINING_LIST),
+                    str(PathConfig.GA_TEST_LIST)
+                )
+                trader.train(X_train, y_train)
+                metrics = trader.evaluate(X_test, y_test)
 
-        trader.save_results(y_test, X_test, metrics.predictions, str(PathConfig.OUTPUT_MLP))
+                print(f"Test set accuracy = {metrics.accuracy}")
+                print("\nConfusion matrix:")
+                print(metrics.confusion_matrix)
+                print("\nClassification Report:")
+                print(metrics.classification_report)
 
-        # Phase 4: Process predictions
-        print("Phase 4: Processing predictions")
-        trader.process_financial_predictions(
-            metrics.predictions,
-            str(PathConfig.OUTPUT_CSV),
-            str(PathConfig.OUTPUT_TEST_PREDICTION)
-        )
+                trader.save_results(y_test, X_test, metrics.predictions, str(PathConfig.OUTPUT_MLP))
 
-        # Phase 5: Run trading system
-        print("Phase 5: Running trading system")
-        system = TradingSystem(company)
-        system.run()
+                # Phase 4: Process predictions
+                print("Phase 4: Processing predictions")
+                trader.process_financial_predictions(
+                    metrics.predictions,
+                    str(PathConfig.OUTPUT_CSV),
+                    str(PathConfig.OUTPUT_TEST_PREDICTION)
+                )
+
+                # Phase 5: Run trading system
+                print("Phase 5: Running trading system")
+                system = TradingSystem(company, start_year)  # Assuming TradingSystem can accept year parameter
+                system.run()
+
+            except Exception as e:
+                print(f"Error processing year {start_year}: {str(e)}")
+                continue
+            
+            print(f"Completed processing for year {start_year}")
+            Scheduler.cleanup_files(company)
 
     @staticmethod
     def main():

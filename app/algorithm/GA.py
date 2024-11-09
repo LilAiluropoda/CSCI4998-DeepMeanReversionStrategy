@@ -353,15 +353,15 @@ class GA:
                 my_pop = Population(GA.population_count, True)
 
                 generation_count = 0
-                my_pop.print_population()
+                # my_pop.print_population()
 
                 builder: List[str] = []
 
                 while my_pop.get_fittest().get_fitness() * 0.7 > FitnessCalc.get_avg_fitness():
                     generation_count += 1
                     fittest = my_pop.get_fittest()
-                    print(f"Generation: {generation_count} Fittest: {fittest.get_fitness()} Fittest Chromosome: {fittest}")
-                    print(f"FitnessCalc.get_avg_fitness(): {FitnessCalc.get_avg_fitness()}")
+                    # print(f"Generation: {generation_count} Fittest: {fittest.get_fitness()} Fittest Chromosome: {fittest}")
+                    # print(f"FitnessCalc.get_avg_fitness(): {FitnessCalc.get_avg_fitness()}")
                     my_pop = Algorithm.evolve_population(my_pop)
 
                 print("Solution found!")

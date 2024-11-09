@@ -29,14 +29,19 @@ class PathConfig:
         return cls.DATA_DIR / company
 
     @classmethod
+    def get_company_data_file(cls, company: str) -> Path:
+        """Get company full period (1997-2017) file path"""
+        return cls.DATA_DIR / f"{company}19972017.csv"
+    
+    @classmethod
     def get_company_training_file(cls, company: str) -> Path:
         """Get company training period file path"""
-        return cls.DATA_DIR / f"{company}19972007.csv"
+        return cls.DATA_DIR / f"{company}_train.csv"
 
     @classmethod
     def get_company_test_file(cls, company: str) -> Path:
         """Get company test period file path"""
-        return cls.DATA_DIR / f"{company}20072017.csv"
+        return cls.DATA_DIR / f"{company}_test.csv"
 
     @classmethod
     def get_trading_plot_path(cls, company: str) -> Path:
