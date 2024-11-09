@@ -5,6 +5,8 @@ from typing import List, Optional
 from multiprocessing import Pool, cpu_count
 import numpy as np
 from functools import lru_cache
+from app.utils.path_config import PathConfig
+from pathlib import Path
 
 
 class Algorithm:
@@ -320,46 +322,31 @@ class GA:
 
     @staticmethod
     def hold_gene_generator(up_trend: bool = False) -> str:
-        """
-        Generate a hold gene.
-
-        Args:
-            up_trend (bool): Whether it's an up trend.
-
-        Returns:
-            str: The generated hold gene.
-        """
+        """Generate a hold gene."""
         value = random.randint(40, 60)
         interval = random.randint(2, 20)
         trend = "1.0" if up_trend else "0.0"
         return f"0 1:{value}.0 2:{interval}.0 3:{trend}\n"
 
     @staticmethod
-    def get_unique_filename(base_filename: str) -> str:
-        """
-        Get a unique filename by appending a number if the file already exists.
-
-        Args:
-            base_filename (str): The base filename to use.
-
-        Returns:
-            str: A unique filename.
-        """
-        if not os.path.exists(base_filename):
+    def get_unique_filename(base_filename: Path) -> Path:
+        """Get a unique filename by appending a number if the file already exists."""
+        if not base_filename.exists():
             return base_filename
 
         index = 1
         while True:
-            new_filename = f"{os.path.splitext(base_filename)[0]}({index}){os.path.splitext(base_filename)[1]}"
-            if not os.path.exists(new_filename):
+            new_filename = base_filename.parent / f"{base_filename.stem}({index}){base_filename.suffix}"
+            if not new_filename.exists():
                 return new_filename
             index += 1
 
     @staticmethod
     def main() -> None:
         """Main method to run the Genetic Algorithm."""
-        output_filename = GA.get_unique_filename(r"C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\GATableListTraining.txt")
-        GA.counter = 0 # reset GA counter
+        output_filename = GA.get_unique_filename(PathConfig.GA_TRAINING_LIST)
+        GA.counter = 0  # reset GA counter
+        
         with open(output_filename, "w") as output_file:
             while GA.counter < 50:
                 GA.counter += 1
@@ -376,7 +363,6 @@ class GA:
                     print(f"Generation: {generation_count} Fittest: {fittest.get_fitness()} Fittest Chromosome: {fittest}")
                     print(f"FitnessCalc.get_avg_fitness(): {FitnessCalc.get_avg_fitness()}")
                     my_pop = Algorithm.evolve_population(my_pop)
-                    # my_pop.print_population()
 
                 print("Solution found!")
                 print(f"Generation: {generation_count}")
@@ -389,9 +375,8 @@ class GA:
                 builder.append(GA.hold_gene_generator())
                 builder.append(GA.hold_gene_generator(True))
 
-                # Write the current iteration's output to the file
                 output_file.writelines(builder)
-                output_file.flush()  # Ensure the data is written to the file
+                output_file.flush()
 
         print(f"Output written to: {output_filename}")
 
@@ -402,13 +387,11 @@ class FitnessCalcScenario:
     def calculate_fitness(chromosome: 'Chromosome') -> int:
         """Optimized fitness calculation using numpy."""
         # Load and cache data
-        data = FitnessCalc.load_data(
-            r"C:\Users\Steve\Desktop\Projects\fyp\app\data\stock_data\output.csv"
-        )
+        data = FitnessCalc.load_data(str(PathConfig.OUTPUT_CSV))
         if data.size == 0:
             return 0
 
-        # Initialize scenario variables
+        # Rest of the method remains the same
         money = 10000.0
         k = 0
         

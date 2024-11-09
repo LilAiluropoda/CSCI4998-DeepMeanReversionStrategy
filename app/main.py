@@ -9,38 +9,7 @@ import shutil
 import os
 import sys
 from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-class PathConfig:
-    """Centralized configuration for all file paths"""
-    
-    # Base paths
-    BASE_DIR = Path(os.getenv('BASE_DIR', 'C:/Users/Steve/Desktop/Projects/fyp'))
-    DATA_DIR = BASE_DIR / 'app' / 'data' / 'stock_data'
-    
-    # Input/Output paths
-    OUTPUT_CSV = DATA_DIR / 'output.csv'
-    OUTPUT_MLP = DATA_DIR / 'outputMLP.csv'
-    OUTPUT_TEST_PREDICTION = DATA_DIR / 'outputOfTestPrediction.txt'
-    GA_TRAINING_LIST = DATA_DIR / 'GATableListTraining.txt'
-    GA_TEST_LIST = DATA_DIR / 'GATableListTest.txt'
-    
-    @classmethod
-    def get_company_dir(cls, company: str) -> Path:
-        """Get company-specific directory path"""
-        return cls.DATA_DIR / company
-    
-    @classmethod
-    def get_company_training_file(cls, company: str) -> Path:
-        """Get company training period file path"""
-        return cls.DATA_DIR / f"{company}19972007.csv"
-    
-    @classmethod
-    def get_company_test_file(cls, company: str) -> Path:
-        """Get company test period file path"""
-        return cls.DATA_DIR / f"{company}20072017.csv"
+from app.utils.path_config import PathConfig
 
 class Scheduler:
     CREATE_TEST_FILE = 0
@@ -53,7 +22,11 @@ class Scheduler:
     ]
 
     CLEANUP_FILES = [
-        'GATableListTraining.txt'  # Add GA training file to cleanup list
+        'GATableListTraining.txt',  # GA training file
+        'output.csv',               # Add other generated files
+        'outputMLP.csv',
+        'outputOfTestPrediction.txt',
+        'GATableListTest.txt'
     ]
     mode = CREATE_TEST_FILE
 
@@ -81,11 +54,10 @@ class Scheduler:
     @staticmethod
     def cleanup_files(company):
         """Clean up all generated and copied files"""
-        # Files to clean up
         files_to_cleanup = [
             PathConfig.get_company_training_file(company),
             PathConfig.get_company_test_file(company),
-            *[PathConfig.DATA_DIR / file for file in Scheduler.CLEANUP_FILES]
+            *[PathConfig.get_data_file_path(file) for file in Scheduler.CLEANUP_FILES]
         ]
         
         for file_path in files_to_cleanup:
@@ -184,6 +156,9 @@ class Scheduler:
 
     @staticmethod
     def main():
+        # Ensure all required directories exist
+        PathConfig.ensure_directories_exist()
+        
         for company in Scheduler.COMPANIES:
             print(f"\n{'='*50}")
             print(f"Starting process for {company}")

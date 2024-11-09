@@ -6,26 +6,9 @@ from typing import List, Tuple, Dict, Any
 from dataclasses import dataclass
 from tabulate import tabulate
 from pathlib import Path
-from dotenv import load_dotenv
+from app.utils.path_config import PathConfig
 from app.visualization.trade_decision import TradeDecisionVisualizer
 
-# Load environment variables
-load_dotenv()
-
-@dataclass
-class PathConfig:
-    """Centralized path configuration"""
-    BASE_DIR: Path = Path(os.getenv('BASE_DIR', 'C:/Users/Steve/Desktop/Projects/fyp'))
-    DATA_DIR: Path = BASE_DIR / 'app' / 'data' / 'stock_data'
-    PLOTS_DIR: Path = BASE_DIR / 'app' / 'data' / 'plots' / 'trading_decisions'
-    
-    TEST_PREDICTIONS: Path = DATA_DIR / 'outputOfTestPrediction.txt'
-    RESULTS_FILE: Path = DATA_DIR / 'Results.csv'
-    
-    @classmethod
-    def get_trading_plot_path(cls, company: str) -> Path:
-        """Get path for trading decision plot"""
-        return cls.PLOTS_DIR / f"trading_decisions_{company}.png"
 
 @dataclass
 class TransactionStats:
@@ -185,7 +168,7 @@ class TradingSystem:
         """Execute complete trading analysis"""
         try:
             # Load data
-            data = pd.read_csv(PathConfig.TEST_PREDICTIONS, delimiter=';', header=None,
+            data = pd.read_csv(PathConfig.OUTPUT_TEST_PREDICTION, delimiter=';', header=None,
                              names=['price', 'signal'])
             
             # Perform analysis

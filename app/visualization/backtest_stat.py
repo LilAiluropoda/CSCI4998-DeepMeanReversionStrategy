@@ -1,22 +1,7 @@
 import pandas as pd
 from tabulate import tabulate
-from pathlib import Path
-from dataclasses import dataclass
-import os
-from dotenv import load_dotenv
 from typing import List, Dict
-
-# Load environment variables
-load_dotenv()
-
-@dataclass
-class PathConfig:
-    """Centralized path configuration"""
-    BASE_DIR: Path = Path(os.getenv('BASE_DIR', 'C:/Users/Steve/Desktop/Projects/fyp'))
-    DATA_DIR: Path = BASE_DIR / 'app' / 'data' / 'stock_data'
-    
-    RESULTS_FILE: Path = DATA_DIR / 'Results.csv'
-    SUMMARY_FILE: Path = DATA_DIR / 'performance_summary.txt'
+from app.utils.path_config import PathConfig
 
 class PerformanceMetrics:
     """Configuration for performance metrics display"""

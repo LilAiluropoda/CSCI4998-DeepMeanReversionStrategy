@@ -2,25 +2,8 @@ import pandas as pd
 from typing import List
 import numpy as np
 from pathlib import Path
-from dataclasses import dataclass
-import os
-from dotenv import load_dotenv
+from app.utils.path_config import PathConfig
 
-# Load environment variables
-load_dotenv()
-
-@dataclass
-class PathConfig:
-    """Centralized path configuration"""
-    BASE_DIR: Path = Path(os.getenv('BASE_DIR', 'C:/Users/Steve/Desktop/Projects/fyp'))
-    DATA_DIR: Path = BASE_DIR / 'app' / 'data' / 'stock_data'
-    
-    @classmethod
-    def get_data_file_path(cls, filename: str) -> Path:
-        """Get full path for a data file"""
-        return cls.DATA_DIR / filename
-
-# Rest of the code remains the same, just update path references
 class DataLoader:
     """
     Handles all data loading, processing, and output operations for financial data.
@@ -92,13 +75,23 @@ class TestDataGenerator:
         self.data: pd.DataFrame = pd.DataFrame()
         
     def process(self) -> None:
+        """Process data and generate test file."""
         self._read_input_file()
         testing_data = self._convert_to_testing_format()
         self._write_output_file(testing_data)
         
+    def process_training(self, company: str) -> None:
+        """Process data and generate training file."""
+        self.input_path = PathConfig.get_data_file_path(f"{company}19972007.csv")
+        self._read_input_file()
+        training_data = self._convert_to_testing_format()
+        self._write_output_file(training_data)
+        
     def _read_input_file(self) -> None:
         try:
+            print(f"Reading from: {self.input_path}")
             self.data = pd.read_csv(self.input_path, sep=';', header=None)
+            print(f"Data shape: {self.data.shape}")
         except IOError as e:
             print(f"Error reading input file: {e}")
             self.data = pd.DataFrame()
@@ -123,14 +116,20 @@ class TestDataGenerator:
         return formatted_data
     
     def _get_trend_from_sma(self, row: pd.Series) -> str:
-        sma50 = float(row[21])
-        sma200 = float(row[22])
-        return "1.0" if sma50 - sma200 > 0 else "0.0"
+        try:
+            sma50 = float(row[21])
+            sma200 = float(row[22])
+            return "1.0" if sma50 - sma200 > 0 else "0.0"
+        except Exception as e:
+            print(f"Error calculating trend: {e}")
+            return "0.0"
     
     def _write_output_file(self, data: List[str]) -> None:
         try:
+            print(f"Writing to: {self.output_path}")
             with open(self.output_path, "w") as writer:
                 writer.writelines(data)
+            print(f"Written {len(data)} lines")
         except IOError as e:
             print(f"Error writing output file: {e}")
 
