@@ -11,7 +11,7 @@ from dataclasses import dataclass
 class ModelConfig:
     """Configuration parameters for the neural network model."""
     hidden_layers: List[int] = None
-    max_iterations: int = 200
+    max_iterations: int = 260
     random_state: int = 1234
     batch_size: Union[int, str] = "auto"
     activation: str = "logistic"

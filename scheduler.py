@@ -94,18 +94,13 @@ class Scheduler:
     
     # List of company tickers
     COMPANIES = [
-        'AAPL', 'AXP', 'BA', 'CAT', 'CSCO', 'CVX', 'DD', 'DIS', 'GE', 'GS',
-        'HD', 'IBM', 'INTC', 'JNJ', 'JPM', 'KO', 'MCD', 'MMM', 'MRK', 'MSFT',
-        'NKE', 'PFE', 'PG', 'TRV', 'UNH', 'UTX', 'VZ', 'WMT', 'XOM'
+            'AAPL', 'AXP', 'BA', 'CAT', 'CSCO', 'CVX', 'DD', 'DIS', 'GE', 'GS',
+            'HD', 'IBM', 'INTC', 'JNJ', 'JPM', 'KO', 'MCD', 'MMM', 'MRK', 'MSFT',
+            'NKE', 'PFE', 'PG', 'TRV', 'UNH', 'UTX', 'VZ', 'WMT', 'XOM'
     ]
-    
+
     # List of files to clean up after each run
     CLEANUP_FILES = [
-        'output.csv',
-        'outputMLP.csv',
-        'GATableListTest.txt',
-        'GATableListTraining.txt',
-        'outputOfTestPrediction.txt'
     ]
     
     mode = CREATE_TEST_FILE
@@ -208,7 +203,7 @@ class Scheduler:
 
         config = ModelConfig(
             hidden_layers=[20, 10, 8, 6, 5],
-            max_iterations=200,
+            max_iterations=260,
             random_state=1234,
             batch_size="auto"
         )
