@@ -342,7 +342,7 @@ class GA:
         output_filename = GA.get_unique_filename(r"C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\GATableListTraining.txt")
         GA.counter = 0 # reset GA counter
         with open(output_filename, "w") as output_file:
-            while GA.counter < 5:
+            while GA.counter < 50:
                 GA.counter += 1
                 my_pop = Population(GA.population_count, True)
 
