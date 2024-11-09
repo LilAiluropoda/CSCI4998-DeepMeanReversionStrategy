@@ -149,7 +149,7 @@ class BackTestReportGenerator:
     @staticmethod
     def save_results(metrics: Dict[str, float]):
         """Saves trading results to a CSV file, appending if file exists."""
-        results_file = "resources2/Results.csv"
+        results_file = "data/stock_data/Results.csv"
         
         # Convert metrics to DataFrame
         df_new = pd.DataFrame([metrics])
@@ -307,7 +307,7 @@ class Visualizer:
         
         # Save plot
         plt.tight_layout()
-        plt.savefig(f'resources2/trading_decisions_{company}.png', bbox_inches='tight', dpi=300)
+        plt.savefig(f'data/plots/trading_decisions/trading_decisions_{company}.png', bbox_inches='tight', dpi=300)
         plt.close()
 
 class TradingSystem:
@@ -324,7 +324,7 @@ class TradingSystem:
         """Executes the complete trading analysis process."""
         try:
             # Load and process data
-            fname: str = "resources2/outputOfTestPrediction.txt"
+            fname: str = "data/stock_data/outputOfTestPrediction.txt"
             data = self.data_loader.read_csv_file(fname)
             
             # Perform backtesting
@@ -342,8 +342,8 @@ class TradingSystem:
             self.visualizer.visualize_trading_decisions(data, self.company)
             
             print(f"\nAnalysis completed successfully for {self.company}")
-            print("Results have been saved to 'resources2/Results.txt'")
-            print(f"Trading visualization has been saved as 'resources2/trading_decisions_{self.company}.png'")
+            print("Results have been saved to 'data/stock_data/Results.txt'")
+            print(f"Trading visualization has been saved as 'data/plots/trading_decisions/trading_decisions_{self.company}.png'")
             
         except Exception as e:
             print(f"Error during analysis: {str(e)}")
