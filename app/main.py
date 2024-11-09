@@ -52,18 +52,19 @@ class Scheduler:
             'NKE', 'PFE', 'PG', 'TRV', 'UNH', 'UTX', 'VZ', 'WMT', 'XOM'
     ]
 
-    CLEANUP_FILES = []
+    CLEANUP_FILES = [
+        'GATableListTraining.txt'  # Add GA training file to cleanup list
+    ]
     mode = CREATE_TEST_FILE
 
     @staticmethod
     def copy_company_files(company):
-        """Copy company CSV files and GATableListTraining.txt from inner folder to data/stock_data folder"""
+        """Copy company CSV files to data/stock_data folder"""
         source_dir = PathConfig.get_company_dir(company)
         
         files_to_copy = [
             f"{company}19972007.csv",
-            f"{company}20072017.csv",
-            "GATableListTraining.txt"
+            f"{company}20072017.csv"
         ]
         
         for file_name in files_to_copy:
@@ -74,49 +75,55 @@ class Scheduler:
                 print(f"Successfully copied: {file_name}")
             except FileNotFoundError:
                 print(f"Warning: {file_name} not found")
-                if file_name.endswith('.csv'):
-                    return False
+                return False
         return True
 
     @staticmethod
     def cleanup_files(company):
         """Clean up all generated and copied files"""
-        company_files = [
+        # Files to clean up
+        files_to_cleanup = [
             PathConfig.get_company_training_file(company),
-            PathConfig.get_company_test_file(company)
+            PathConfig.get_company_test_file(company),
+            *[PathConfig.DATA_DIR / file for file in Scheduler.CLEANUP_FILES]
         ]
         
-        for file_path in company_files:
+        for file_path in files_to_cleanup:
             try:
-                file_path.unlink()
-                print(f"Removed: {file_path}")
-            except FileNotFoundError:
-                print(f"File not found: {file_path}")
-        
-        for file in Scheduler.CLEANUP_FILES:
-            file_path = PathConfig.DATA_DIR / file
-            try:
-                file_path.unlink()
-                print(f"Removed: {file_path}")
-            except FileNotFoundError:
-                print(f"File not found: {file_path}")
+                if file_path.exists():
+                    file_path.unlink()
+                    print(f"Removed: {file_path}")
+            except Exception as e:
+                print(f"Error removing {file_path}: {e}")
+
+    @staticmethod
+    def run_ga(company):
+        """Run Genetic Algorithm optimization for training data generation"""
+        print("Running Genetic Algorithm to generate training data")
+        training_file = PathConfig.get_company_training_file(company)
+        if not training_file.exists():
+            print(f"Error: Training file not found: {training_file}")
+            return False
+            
+        try:
+            GA.main()  # This should generate GATableListTraining.txt
+            return PathConfig.GA_TRAINING_LIST.exists()
+        except Exception as e:
+            print(f"Error during GA execution: {e}")
+            return False
 
     @staticmethod
     def process_company(company):
         print(f"\nProcessing company: {company}")
         
+        # Phase 0 + 1: Feature Processing
         processor = FeatureMaker()
-        test_data_getter = TestDataGenerator(
-            str(PathConfig.OUTPUT_CSV),
-            str(PathConfig.GA_TEST_LIST)
-        )
-        
         custom_params = {
             'rsi': {'periods': range(1, 21)},
             'sma': {'periods': [50, 200]}
         }
 
-        print("Phase 0 + 1")
+        print("Phase 0 + 1: Processing features")
         processor.run_analysis(
             input_file_path=str(PathConfig.get_company_test_file(company)),
             output_file_path=str(PathConfig.OUTPUT_CSV),
@@ -124,10 +131,21 @@ class Scheduler:
             custom_params=custom_params
         )
 
-        print("Phase2")
+        # Phase 2: Generate test data
+        print("Phase 2: Generating test data")
+        test_data_getter = TestDataGenerator(
+            str(PathConfig.OUTPUT_CSV),
+            str(PathConfig.GA_TEST_LIST)
+        )
         test_data_getter.process()
 
-        print("Phase3")
+        # Generate training data using GA
+        print("Phase 2.5: Generating training data using GA")
+        if not Scheduler.run_ga(company):
+            raise Exception("Failed to generate training data using GA")
+
+        # Phase 3: Train and evaluate model
+        print("Phase 3: Training and evaluating model")
         config = ModelConfig(
             hidden_layers=[20, 10, 8, 6, 5],
             max_iterations=260,
@@ -151,14 +169,16 @@ class Scheduler:
 
         trader.save_results(y_test, X_test, metrics.predictions, str(PathConfig.OUTPUT_MLP))
 
-        print("Phase4")
+        # Phase 4: Process predictions
+        print("Phase 4: Processing predictions")
         trader.process_financial_predictions(
             metrics.predictions,
             str(PathConfig.OUTPUT_CSV),
             str(PathConfig.OUTPUT_TEST_PREDICTION)
         )
 
-        print("Phase5")
+        # Phase 5: Run trading system
+        print("Phase 5: Running trading system")
         system = TradingSystem(company)
         system.run()
 
