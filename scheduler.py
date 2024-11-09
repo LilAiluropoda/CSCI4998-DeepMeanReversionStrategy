@@ -17,7 +17,7 @@ class ResultsVisualizer:
         """Creates a tabulated grid view of performance metrics across all companies."""
         try:
             # Read the results CSV
-            df = pd.read_csv("resources2/Results.csv")
+            df = pd.read_csv("data/stock_data/Results.csv")
             
             # Select and rename columns for display
             display_df = df[[
@@ -78,12 +78,12 @@ class ResultsVisualizer:
             print(table)
             
             # Save to file
-            with open('resources2/performance_summary.txt', 'w') as f:
+            with open('data/stock_data/performance_summary.txt', 'w') as f:
                 f.write("Trading Strategy Performance Summary\n")
                 f.write("=" * 120 + "\n")  # Increased width to accommodate more columns
                 f.write(table)
             
-            print("\nPerformance summary has been saved to 'resources2/performance_summary.txt'")
+            print("\nPerformance summary has been saved to 'data/stock_data/performance_summary.txt'")
             
         except Exception as e:
             print(f"Error creating performance grid: {str(e)}")
@@ -107,9 +107,9 @@ class Scheduler:
 
     @staticmethod
     def copy_company_files(company):
-        """Copy company CSV files and GATableListTraining.txt from inner folder to resources2 folder"""
-        source_dir = f"resources2/{company}"  # Adjust this to your inner folder path
-        dest_dir = "resources2"
+        """Copy company CSV files and GATableListTraining.txt from inner folder to data/stock_data folder"""
+        source_dir = f"data/stock_data/{company}"  # Adjust this to your inner folder path
+        dest_dir = "data/stock_data"
         
         # List of files to copy
         files_to_copy = [
@@ -136,7 +136,7 @@ class Scheduler:
     @staticmethod
     def cleanup_files(company):
         """Clean up all generated and copied files"""
-        resources_dir = "resources2"
+        resources_dir = "data/stock_data"
         
         # Clean up company-specific CSV files
         company_files = [
@@ -171,11 +171,11 @@ class Scheduler:
     def process_company(company):
         print(f"\nProcessing company: {company}")
         
-        input_file_path_phase1 = f"resources2/{company}19972007.csv"
-        input_file_path_phase1_test = f"resources2/{company}20072017.csv"
+        input_file_path_phase1 = f"data/stock_data/{company}19972007.csv"
+        input_file_path_phase1_test = f"data/stock_data/{company}20072017.csv"
         
         processor = FeatureMaker()
-        test_data_getter = TestDataGenerator("resources2/output.csv", "resources2/GATableListTest.txt")
+        test_data_getter = TestDataGenerator("data/stock_data/output.csv", "data/stock_data/GATableListTest.txt")
         
         custom_params = {
             'rsi': {'periods': range(1, 21)},
@@ -185,7 +185,7 @@ class Scheduler:
         print("Phase 0 + 1")
         processor.run_analysis(
             input_file_path=input_file_path_phase1_test,
-            output_file_path="resources2/output.csv",
+            output_file_path="data/stock_data/output.csv",
             features=['rsi', 'sma'],
             custom_params=custom_params
         )
@@ -196,7 +196,7 @@ class Scheduler:
         test_data_getter.process()
 
         print("Phase3")
-        base_path = Path("resources2")
+        base_path = Path("data/stock_data")
         train_path = str(base_path / "GATableListTraining.txt")
         test_path = str(base_path / "GATableListTest.txt")
         output_path = str(base_path / "outputMLP.csv")
@@ -224,8 +224,8 @@ class Scheduler:
         print("Phase4")
         trader.process_financial_predictions(
             metrics.predictions,
-            "resources2/output.csv",
-            "resources2/outputOfTestPrediction.txt"
+            "data/stock_data/output.csv",
+            "data/stock_data/outputOfTestPrediction.txt"
         )
 
         print("Phase5")
