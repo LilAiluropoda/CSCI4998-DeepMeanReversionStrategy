@@ -5,8 +5,27 @@ import os
 from typing import List, Tuple, Dict, Any
 from dataclasses import dataclass
 from tabulate import tabulate
-from app.data.datahelper import DataLoader
+from pathlib import Path
+from dotenv import load_dotenv
 from app.visualization.trade_decision import TradeDecisionVisualizer
+
+# Load environment variables
+load_dotenv()
+
+@dataclass
+class PathConfig:
+    """Centralized path configuration"""
+    BASE_DIR: Path = Path(os.getenv('BASE_DIR', 'C:/Users/Steve/Desktop/Projects/fyp'))
+    DATA_DIR: Path = BASE_DIR / 'app' / 'data' / 'stock_data'
+    PLOTS_DIR: Path = BASE_DIR / 'app' / 'data' / 'plots' / 'trading_decisions'
+    
+    TEST_PREDICTIONS: Path = DATA_DIR / 'outputOfTestPrediction.txt'
+    RESULTS_FILE: Path = DATA_DIR / 'Results.csv'
+    
+    @classmethod
+    def get_trading_plot_path(cls, company: str) -> Path:
+        """Get path for trading decision plot"""
+        return cls.PLOTS_DIR / f"trading_decisions_{company}.png"
 
 @dataclass
 class TransactionStats:
@@ -43,14 +62,15 @@ class Backtester:
             if data.loc[j, 'signal'] == 2.0 or force_sell:
                 sell_point = data.loc[j, 'price'] * 100
                 gain: float = sell_point - buy_point
-                stats = Backtester.update_stats(stats, gain, share_number, sell_point, j - k)
+                stats = Backtester._update_stats(stats, gain, share_number, sell_point, j - k)
                 return j + 1, stats
         
         return k + 1, stats
 
     @staticmethod
-    def update_stats(stats: TransactionStats, gain: float, share_number: float, 
+    def _update_stats(stats: TransactionStats, gain: float, share_number: float, 
                     sell_point: float, transaction_length: int) -> TransactionStats:
+        """Update transaction statistics after a trade"""
         stats.success_transaction_count += 1 if gain > 0 else 0
         stats.failed_transaction_count += 1 if gain <= 0 else 0
         stats.maximum_gain = max(stats.maximum_gain, gain)
@@ -64,49 +84,44 @@ class Backtester:
         stats.total_gain += gain
         return stats
 
-    @staticmethod
-    def process_transactions(data: pd.DataFrame, company: str) -> TransactionStats:
-        stats: TransactionStats = TransactionStats()
+    def analyze_transactions(self, data: pd.DataFrame) -> Tuple[TransactionStats, float]:
+        """Perform complete transaction analysis"""
+        stats = TransactionStats()
         k: int = 0
         while k < len(data) - 1:
             if data.loc[k, 'signal'] == 1.0:
-                k, stats = Backtester.process_transaction(data, k, stats)
+                k, stats = self.process_transaction(data, k, stats)
             else:
                 k += 1
-        return stats
+                
+        money_bah = self._calculate_bah(data)
+        return stats, money_bah
 
     @staticmethod
-    def calculate_bah(data: pd.DataFrame) -> float:
+    def _calculate_bah(data: pd.DataFrame) -> float:
+        """Calculate Buy and Hold strategy results"""
         money_bah: float = 10000.0
         buy_point_bah: float = data.loc[0, 'price']
         share_number_bah: float = (money_bah - 1.0) / buy_point_bah
         return (data.loc[len(data)-1, 'price'] * share_number_bah) - 1.0
 
-class BackTestReportGenerator:
-    """Handles report generation and result display for a single company."""
-
+class PerformanceMetricsCalculator:
+    """Calculates trading performance metrics"""
+    
     @staticmethod
-    def generate_report(stats: TransactionStats, money_bah: float, data_length: int, company: str) -> Dict[str, float]:
-        """
-        Generates a comprehensive report for a single company's trading performance.
-        
-        Returns:
-            Dict containing all calculated metrics
-        """
+    def calculate_metrics(stats: TransactionStats, money_bah: float, 
+                         data_length: int, company: str) -> Dict[str, float]:
+        """Calculate comprehensive trading metrics"""
         number_of_years: float = (data_length - 1) / 365
         
-        # Calculate BaH metrics
-        bah_return = money_bah - 10000.0
+        # Calculate base metrics
+        strategy_return_pct = (stats.money / 10000.0 - 1) * 100
+        strategy_annual_return = ((math.exp(math.log(stats.money/10000.0)/number_of_years)-1)*100)
+        
         bah_return_pct = (money_bah / 10000.0 - 1) * 100
         bah_annual_return = ((math.exp(math.log(money_bah/10000.0)/number_of_years)-1)*100)
         
-        # Calculate strategy metrics
-        strategy_return_pct = (stats.money / 10000.0 - 1) * 100
-        strategy_annual_return = ((math.exp(math.log(stats.money/10000.0)/number_of_years)-1)*100)
-        outperformance = strategy_return_pct - bah_return_pct
-        annual_outperformance = strategy_annual_return - bah_annual_return
-        
-        metrics = {
+        return {
             "Company": company,
             "Final_Return": round(stats.money, 2),
             "Final_Return_Pct": round(strategy_return_pct, 2),
@@ -114,8 +129,8 @@ class BackTestReportGenerator:
             "BaH_Final_Return": round(money_bah, 2),
             "BaH_Return_Pct": round(bah_return_pct, 2),
             "BaH_Annualized_Return": round(bah_annual_return, 2),
-            "Strategy_Outperformance": round(outperformance, 2),
-            "Annual_Outperformance": round(annual_outperformance, 2),
+            "Strategy_Outperformance": round(strategy_return_pct - bah_return_pct, 2),
+            "Annual_Outperformance": round(strategy_annual_return - bah_annual_return, 2),
             "Annual_Transactions": round(stats.transaction_count / number_of_years, 1),
             "Success_Rate": round((stats.success_transaction_count / stats.transaction_count) * 100, 2),
             "Avg_Profit_per_Trade": round((stats.total_percent_profit / stats.transaction_count) * 100, 2),
@@ -126,74 +141,66 @@ class BackTestReportGenerator:
             "Minimum_Capital": round(stats.minimum_money, 2),
             "Idle_Ratio": round(((data_length - stats.total_transaction_length) / data_length) * 100, 2)
         }
-        return metrics
 
+class ResultsManager:
+    """Manages the storage and display of trading results"""
+    
     @staticmethod
-    def display_results(metrics: Dict[str, float]):
-        """Displays trading results in a formatted table."""
-        results = [[k, v] for k, v in metrics.items()]
-        print("\n=== Trading Performance Report ===")
-        print(tabulate(results, headers=["Metric", "Value"], tablefmt="grid"))
-
-    @staticmethod
-    def save_results(metrics: Dict[str, float]):
-        """Saves trading results to a CSV file, appending if file exists."""
-        results_file = "C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\Results.csv"
-        
-        # Convert metrics to DataFrame
+    def save_results(metrics: Dict[str, float]) -> None:
+        """Save results to CSV file"""
+        results_path = PathConfig.RESULTS_FILE
         df_new = pd.DataFrame([metrics])
         
         try:
-            # Try to read existing CSV file
-            if os.path.exists(results_file):
-                df_existing = pd.read_csv(results_file)
-                # Append new results
+            if results_path.exists():
+                df_existing = pd.read_csv(results_path)
                 df_combined = pd.concat([df_existing, df_new], ignore_index=True)
             else:
                 df_combined = df_new
             
-            # Save to CSV
-            df_combined.to_csv(results_file, index=False)
-            print(f"Results appended to {results_file}")
+            df_combined.to_csv(results_path, index=False)
+            print(f"Results saved to {results_path}")
             
         except Exception as e:
-            print(f"Error saving results to CSV: {str(e)}")
+            print(f"Error saving results: {str(e)}")
+
+    @staticmethod
+    def display_results(metrics: Dict[str, float]) -> None:
+        """Display results in formatted table"""
+        results = [[k, v] for k, v in metrics.items()]
+        print("\n=== Trading Performance Report ===")
+        print(tabulate(results, headers=["Metric", "Value"], tablefmt="grid"))
 
 class TradingSystem:
-    """Main trading system that coordinates all operations for a single company."""
+    """Main trading system coordinator"""
 
     def __init__(self, company: str):
         self.company = company
-        self.data_loader = DataLoader()
         self.backtester = Backtester()
-        self.report_generator = BackTestReportGenerator()
+        self.metrics_calculator = PerformanceMetricsCalculator()
+        self.results_manager = ResultsManager()
         self.visualizer = TradeDecisionVisualizer()
 
-    def run(self):
-        """Executes the complete trading analysis process."""
+    def run(self) -> None:
+        """Execute complete trading analysis"""
         try:
-            # Load and process data
-            fname: str = "C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\outputOfTestPrediction.txt"
-            data = self.data_loader.load_signal_data(fname)
+            # Load data
+            data = pd.read_csv(PathConfig.TEST_PREDICTIONS, delimiter=';', header=None,
+                             names=['price', 'signal'])
             
-            # Perform backtesting
-            stats = self.backtester.process_transactions(data, self.company)
-            money_bah = self.backtester.calculate_bah(data)
+            # Perform analysis
+            stats, money_bah = self.backtester.analyze_transactions(data)
             
-            # Generate and display results
-            metrics = self.report_generator.generate_report(
+            # Calculate and save metrics
+            metrics = self.metrics_calculator.calculate_metrics(
                 stats, money_bah, len(data), self.company
             )
-            # self.report_generator.display_results(metrics)
-            self.report_generator.save_results(metrics)
+            self.results_manager.save_results(metrics)
             
-            # Visualize trading decisions
+            # Generate visualization
             self.visualizer.visualize_trading_decisions(data, self.company)
             
-            print(f"\nAnalysis completed successfully for {self.company}")
-            print("Results have been saved to 'data/stock_data/Results.txt'")
-            print(f"Trading visualization has been saved as 'data/plots/trading_decisions/trading_decisions_{self.company}.png'")
+            print(f"\nAnalysis completed for {self.company}")
             
         except Exception as e:
             print(f"Error during analysis: {str(e)}")
-

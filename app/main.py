@@ -3,100 +3,113 @@ from app.data.datahelper import TestDataGenerator
 from app.algorithm.MLPTrader import ModelConfig, MLTrader
 from app.backtesting.backtest_system import TradingSystem
 from app.algorithm.GA import GA
+from app.visualization.backtest_stat import BackTestStatisticVisualizer
 from pathlib import Path
 import shutil
 import os
 import sys
-from app.visualization.backtest_stat import BackTestStatisticVisualizer
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+class PathConfig:
+    """Centralized configuration for all file paths"""
+    
+    # Base paths
+    BASE_DIR = Path(os.getenv('BASE_DIR', 'C:/Users/Steve/Desktop/Projects/fyp'))
+    DATA_DIR = BASE_DIR / 'app' / 'data' / 'stock_data'
+    
+    # Input/Output paths
+    OUTPUT_CSV = DATA_DIR / 'output.csv'
+    OUTPUT_MLP = DATA_DIR / 'outputMLP.csv'
+    OUTPUT_TEST_PREDICTION = DATA_DIR / 'outputOfTestPrediction.txt'
+    GA_TRAINING_LIST = DATA_DIR / 'GATableListTraining.txt'
+    GA_TEST_LIST = DATA_DIR / 'GATableListTest.txt'
+    
+    @classmethod
+    def get_company_dir(cls, company: str) -> Path:
+        """Get company-specific directory path"""
+        return cls.DATA_DIR / company
+    
+    @classmethod
+    def get_company_training_file(cls, company: str) -> Path:
+        """Get company training period file path"""
+        return cls.DATA_DIR / f"{company}19972007.csv"
+    
+    @classmethod
+    def get_company_test_file(cls, company: str) -> Path:
+        """Get company test period file path"""
+        return cls.DATA_DIR / f"{company}20072017.csv"
 
 class Scheduler:
     CREATE_TEST_FILE = 0
     CALCULATE = 1
     
-    # List of company tickers
     COMPANIES = [
             'AAPL', 'AXP', 'BA', 'CAT', 'CSCO', 'CVX', 'DD', 'DIS', 'GE', 'GS',
             'HD', 'IBM', 'INTC', 'JNJ', 'JPM', 'KO', 'MCD', 'MMM', 'MRK', 'MSFT',
             'NKE', 'PFE', 'PG', 'TRV', 'UNH', 'UTX', 'VZ', 'WMT', 'XOM'
     ]
 
-    # List of files to clean up after each run
-    CLEANUP_FILES = [
-    ]
-    
+    CLEANUP_FILES = []
     mode = CREATE_TEST_FILE
 
     @staticmethod
     def copy_company_files(company):
         """Copy company CSV files and GATableListTraining.txt from inner folder to data/stock_data folder"""
-        source_dir = f"C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\{company}"  # Adjust this to your inner folder path
-        dest_dir = "C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data"
+        source_dir = PathConfig.get_company_dir(company)
         
-        # List of files to copy
         files_to_copy = [
-            f"{company}19972007.csv",  # training period file
-            f"{company}20072017.csv",  # test period file
-            "GATableListTraining.txt"  # GA training file
+            f"{company}19972007.csv",
+            f"{company}20072017.csv",
+            "GATableListTraining.txt"
         ]
         
-        # Try to copy each file
         for file_name in files_to_copy:
-            source_path = os.path.join(source_dir, file_name)
-            dest_path = os.path.join(dest_dir, file_name)
+            source_path = source_dir / file_name
+            dest_path = PathConfig.DATA_DIR / file_name
             try:
                 shutil.copy2(source_path, dest_path)
                 print(f"Successfully copied: {file_name}")
             except FileNotFoundError:
                 print(f"Warning: {file_name} not found")
-                # Only return False if one of the CSV files is missing
                 if file_name.endswith('.csv'):
                     return False
-                
         return True
 
     @staticmethod
     def cleanup_files(company):
         """Clean up all generated and copied files"""
-        resources_dir = "C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data"
-        
-        # Clean up company-specific CSV files
         company_files = [
-            f"{company}19972007.csv",
-            f"{company}20072017.csv"
+            PathConfig.get_company_training_file(company),
+            PathConfig.get_company_test_file(company)
         ]
         
-        # Remove company CSV files
-        for file in company_files:
-            file_path = os.path.join(resources_dir, file)
+        for file_path in company_files:
             try:
-                os.remove(file_path)
-                print(f"Removed: {file}")
+                file_path.unlink()
+                print(f"Removed: {file_path}")
             except FileNotFoundError:
-                print(f"File not found: {file}")
+                print(f"File not found: {file_path}")
         
-        # Remove generated files
         for file in Scheduler.CLEANUP_FILES:
-            file_path = os.path.join(resources_dir, file)
+            file_path = PathConfig.DATA_DIR / file
             try:
-                os.remove(file_path)
-                print(f"Removed: {file}")
+                file_path.unlink()
+                print(f"Removed: {file_path}")
             except FileNotFoundError:
-                print(f"File not found: {file}")
-
-    @staticmethod
-    def run_ga():
-        print("Running Genetic Algorithm")
-        # GA.main()
+                print(f"File not found: {file_path}")
 
     @staticmethod
     def process_company(company):
         print(f"\nProcessing company: {company}")
         
-        input_file_path_phase1 = f"C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\{company}19972007.csv"
-        input_file_path_phase1_test = f"C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\{company}20072017.csv"
-        
         processor = FeatureMaker()
-        test_data_getter = TestDataGenerator("C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\output.csv", "C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\GATableListTest.txt")
+        test_data_getter = TestDataGenerator(
+            str(PathConfig.OUTPUT_CSV),
+            str(PathConfig.GA_TEST_LIST)
+        )
         
         custom_params = {
             'rsi': {'periods': range(1, 21)},
@@ -105,23 +118,16 @@ class Scheduler:
 
         print("Phase 0 + 1")
         processor.run_analysis(
-            input_file_path=input_file_path_phase1_test,
-            output_file_path="C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\output.csv",
+            input_file_path=str(PathConfig.get_company_test_file(company)),
+            output_file_path=str(PathConfig.OUTPUT_CSV),
             features=['rsi', 'sma'],
             custom_params=custom_params
         )
-
-        # Scheduler.run_ga()
 
         print("Phase2")
         test_data_getter.process()
 
         print("Phase3")
-        base_path = Path("C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data")
-        train_path = str(base_path / "GATableListTraining.txt")
-        test_path = str(base_path / "GATableListTest.txt")
-        output_path = str(base_path / "outputMLP.csv")
-
         config = ModelConfig(
             hidden_layers=[20, 10, 8, 6, 5],
             max_iterations=260,
@@ -130,7 +136,10 @@ class Scheduler:
         )
         
         trader = MLTrader(config)
-        (X_train, y_train), (X_test, y_test) = trader.prepare_data(train_path, test_path)
+        (X_train, y_train), (X_test, y_test) = trader.prepare_data(
+            str(PathConfig.GA_TRAINING_LIST),
+            str(PathConfig.GA_TEST_LIST)
+        )
         trader.train(X_train, y_train)
         metrics = trader.evaluate(X_test, y_test)
 
@@ -140,13 +149,13 @@ class Scheduler:
         print("\nClassification Report:")
         print(metrics.classification_report)
 
-        trader.save_results(y_test, X_test, metrics.predictions, output_path)
+        trader.save_results(y_test, X_test, metrics.predictions, str(PathConfig.OUTPUT_MLP))
 
         print("Phase4")
         trader.process_financial_predictions(
             metrics.predictions,
-            "C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\output.csv",
-            "C:\\Users\\Steve\\Desktop\\Projects\\fyp\\app\\data\\stock_data\\outputOfTestPrediction.txt"
+            str(PathConfig.OUTPUT_CSV),
+            str(PathConfig.OUTPUT_TEST_PREDICTION)
         )
 
         print("Phase5")
@@ -166,7 +175,6 @@ class Scheduler:
                 except Exception as e:
                     print(f"Error processing {company}: {str(e)}")
                 finally:
-                    # Clean up files regardless of success or failure
                     print(f"\nCleaning up files for {company}")
                     Scheduler.cleanup_files(company)
             else:
