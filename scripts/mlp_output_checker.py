@@ -6,9 +6,9 @@ from pathlib import Path
 import shutil
 
 # Import required modules
-from phase1 import FeatureMaker
-from phase2 import TestDataGenerator
-from phase3 import ModelConfig, MLTrader
+from app.preprocessing.feature_proprocessor import FeatureMaker
+from app.data.datahelper import TestDataGenerator
+from app.algorithm.MLPTrader import ModelConfig, MLTrader
 
 class MLPComparisonSystem:
     def __init__(self):
