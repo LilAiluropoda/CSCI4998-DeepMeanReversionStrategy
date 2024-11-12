@@ -6,26 +6,9 @@ from typing import List, Tuple, Dict, Any
 from dataclasses import dataclass
 from tabulate import tabulate
 from pathlib import Path
-from dotenv import load_dotenv
+from app.utils.path_config import PathConfig
 from app.visualization.trade_decision import TradeDecisionVisualizer
 
-# Load environment variables
-load_dotenv()
-
-@dataclass
-class PathConfig:
-    """Centralized path configuration"""
-    BASE_DIR: Path = Path(os.getenv('BASE_DIR', 'C:/Users/Steve/Desktop/Projects/fyp'))
-    DATA_DIR: Path = BASE_DIR / 'app' / 'data' / 'stock_data'
-    PLOTS_DIR: Path = BASE_DIR / 'app' / 'data' / 'plots' / 'trading_decisions'
-    
-    TEST_PREDICTIONS: Path = DATA_DIR / 'outputOfTestPrediction.txt'
-    RESULTS_FILE: Path = DATA_DIR / 'Results.csv'
-    
-    @classmethod
-    def get_trading_plot_path(cls, company: str) -> Path:
-        """Get path for trading decision plot"""
-        return cls.PLOTS_DIR / f"trading_decisions_{company}.png"
 
 @dataclass
 class TransactionStats:
@@ -154,12 +137,25 @@ class ResultsManager:
         try:
             if results_path.exists():
                 df_existing = pd.read_csv(results_path)
-                df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+                # Check if entry already exists
+                mask = (df_existing['Company'] == metrics['Company']) & \
+                      (df_existing['Year'] == metrics['Year'])
+                
+                if mask.any():
+                    # Update existing entry
+                    df_existing.loc[mask] = df_new.iloc[0]
+                    df_combined = df_existing
+                else:
+                    # Add new entry
+                    df_combined = pd.concat([df_existing, df_new], ignore_index=True)
             else:
                 df_combined = df_new
             
+            # Sort by Company and Year
+            df_combined = df_combined.sort_values(['Company', 'Year'])
+            
             df_combined.to_csv(results_path, index=False)
-            print(f"Results saved to {results_path}")
+            print(f"Results saved to {results_path} for {metrics['Company']} - Year {metrics['Year']}")
             
         except Exception as e:
             print(f"Error saving results: {str(e)}")
@@ -168,14 +164,15 @@ class ResultsManager:
     def display_results(metrics: Dict[str, float]) -> None:
         """Display results in formatted table"""
         results = [[k, v] for k, v in metrics.items()]
-        print("\n=== Trading Performance Report ===")
+        print(f"\n=== Trading Performance Report - {metrics['Company']} ({metrics['Year']}) ===")
         print(tabulate(results, headers=["Metric", "Value"], tablefmt="grid"))
 
 class TradingSystem:
     """Main trading system coordinator"""
 
-    def __init__(self, company: str):
+    def __init__(self, company: str, year: int):
         self.company = company
+        self.year = year
         self.backtester = Backtester()
         self.metrics_calculator = PerformanceMetricsCalculator()
         self.results_manager = ResultsManager()
@@ -185,22 +182,35 @@ class TradingSystem:
         """Execute complete trading analysis"""
         try:
             # Load data
-            data = pd.read_csv(PathConfig.TEST_PREDICTIONS, delimiter=';', header=None,
-                             names=['price', 'signal'])
+            data = pd.read_csv(
+                PathConfig.OUTPUT_TEST_PREDICTION, 
+                delimiter=';', 
+                header=None,
+                names=['price', 'signal']
+            )
             
             # Perform analysis
             stats, money_bah = self.backtester.analyze_transactions(data)
             
-            # Calculate and save metrics
+            # Calculate and save metrics with year information
             metrics = self.metrics_calculator.calculate_metrics(
                 stats, money_bah, len(data), self.company
             )
+            
+            # Add year information to metrics
+            metrics.update({
+                "Year": self.year,
+                "Training_Period": f"{self.year}-{self.year+3}",
+                "Testing_Period": f"{self.year+4}"
+            })
+            
+            # Save results
             self.results_manager.save_results(metrics)
             
-            # Generate visualization
-            self.visualizer.visualize_trading_decisions(data, self.company)
+            # Generate visualization (commented out as in original)
+            # self.visualizer.visualize_trading_decisions(data, self.company)
             
-            print(f"\nAnalysis completed for {self.company}")
+            print(f"\nAnalysis completed for {self.company} - Year {self.year}")
             
         except Exception as e:
-            print(f"Error during analysis: {str(e)}")
+            print(f"Error during analysis for {self.company} - Year {self.year}: {str(e)}")

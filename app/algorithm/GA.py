@@ -2,6 +2,12 @@ import random
 import os
 import csv
 from typing import List, Optional
+from multiprocessing import Pool, cpu_count
+import numpy as np
+from functools import lru_cache
+from app.utils.path_config import PathConfig
+from pathlib import Path
+
 
 class Algorithm:
     """Class containing genetic algorithm methods."""
@@ -178,59 +184,74 @@ class Chromosome:
         return f"{self} : {self.fitness}"
 
 class FitnessCalc:
-    """Class for calculating fitness."""
+    """Optimized class for calculating fitness."""
 
     max_fitness: int = 0
     avg_fitness: float = 0
     fitness_total: int = 0
+    _cached_data: Optional[np.ndarray] = None
 
     @staticmethod
-    def get_fitness_calc(chromosome: Chromosome) -> int:
-        """
-        Calculate the fitness of a chromosome.
+    @lru_cache(maxsize=1)
+    def load_data(fname: str) -> np.ndarray:
+        """Cache and load CSV data for repeated use."""
+        if FitnessCalc._cached_data is None:
+            try:
+                FitnessCalc._cached_data = np.genfromtxt(
+                    fname, 
+                    delimiter=';',
+                    dtype=float
+                )
+            except Exception as e:
+                print(f"Error loading data: {e}")
+                return np.array([])
+        return FitnessCalc._cached_data
 
-        Args:
-            chromosome (Chromosome): The chromosome to evaluate.
+    @staticmethod
+    def parallel_fitness_calc(chromosomes: List['Chromosome'], chunk_size: int = 50) -> List[int]:
+        """Calculate fitness for multiple chromosomes in parallel."""
+        with Pool(processes=cpu_count() - 1) as pool:
+            fitnesses = pool.map(FitnessCalcScenario.calculate_fitness, 
+                               chromosomes, 
+                               chunk_size)
+            
+            # Update fitness statistics
+            FitnessCalc.fitness_total = sum(fitnesses)
+            FitnessCalc.max_fitness = max(FitnessCalc.max_fitness, max(fitnesses))
+            
+            return fitnesses
 
-        Returns:
-            int: The fitness value.
-        """
+    @staticmethod
+    def get_fitness_calc(chromosome: 'Chromosome') -> int:
+        """Calculate fitness for a single chromosome."""
         fitness = FitnessCalcScenario.calculate_fitness(chromosome)
         FitnessCalc.fitness_total += fitness
-        if FitnessCalc.max_fitness < fitness:
-            FitnessCalc.max_fitness = fitness
+        FitnessCalc.max_fitness = max(FitnessCalc.max_fitness, fitness)
         return fitness
 
     @staticmethod
     def get_avg_fitness() -> float:
-        """
-        Get the average fitness of the population.
-
-        Returns:
-            float: The average fitness.
-        """
+        """Calculate average fitness."""
         FitnessCalc.avg_fitness = FitnessCalc.fitness_total / GA.population_count
         return FitnessCalc.avg_fitness
 
     @staticmethod
     def set_fitness_total(set_value: int) -> None:
-        """
-        Set the total fitness.
-
-        Args:
-            set_value (int): The value to set.
-        """
+        """Set the total fitness value."""
         FitnessCalc.fitness_total = set_value
 
     @staticmethod
-    def get_max_fitness_calc() -> int:
-        """
-        Get the maximum fitness.
+    def reset_fitness_stats():
+        """Reset all fitness statistics."""
+        FitnessCalc.max_fitness = 0
+        FitnessCalc.avg_fitness = 0
+        FitnessCalc.fitness_total = 0
 
-        Returns:
-            int: The maximum fitness value.
-        """
-        return FitnessCalc.max_fitness
+    @staticmethod
+    def clear_cache():
+        """Clear the cached data."""
+        FitnessCalc._cached_data = None
+        FitnessCalc.load_data.cache_clear()
 
 class Population:
     """Class representing a population of chromosomes."""
@@ -301,45 +322,30 @@ class GA:
 
     @staticmethod
     def hold_gene_generator(up_trend: bool = False) -> str:
-        """
-        Generate a hold gene.
-
-        Args:
-            up_trend (bool): Whether it's an up trend.
-
-        Returns:
-            str: The generated hold gene.
-        """
+        """Generate a hold gene."""
         value = random.randint(40, 60)
         interval = random.randint(2, 20)
         trend = "1.0" if up_trend else "0.0"
         return f"0 1:{value}.0 2:{interval}.0 3:{trend}\n"
 
     @staticmethod
-    def get_unique_filename(base_filename: str) -> str:
-        """
-        Get a unique filename by appending a number if the file already exists.
-
-        Args:
-            base_filename (str): The base filename to use.
-
-        Returns:
-            str: A unique filename.
-        """
-        if not os.path.exists(base_filename):
+    def get_unique_filename(base_filename: Path) -> Path:
+        """Get a unique filename by appending a number if the file already exists."""
+        if not base_filename.exists():
             return base_filename
 
         index = 1
         while True:
-            new_filename = f"{os.path.splitext(base_filename)[0]}({index}){os.path.splitext(base_filename)[1]}"
-            if not os.path.exists(new_filename):
+            new_filename = base_filename.parent / f"{base_filename.stem}({index}){base_filename.suffix}"
+            if not new_filename.exists():
                 return new_filename
             index += 1
 
     @staticmethod
     def main() -> None:
         """Main method to run the Genetic Algorithm."""
-        output_filename = GA.get_unique_filename("resources2/GATableListTraining.txt")
+        output_filename = GA.get_unique_filename(PathConfig.GA_TRAINING_LIST)
+        GA.counter = 0  # reset GA counter
         
         with open(output_filename, "w") as output_file:
             while GA.counter < 50:
@@ -347,17 +353,16 @@ class GA:
                 my_pop = Population(GA.population_count, True)
 
                 generation_count = 0
-                my_pop.print_population()
+                # my_pop.print_population()
 
                 builder: List[str] = []
 
                 while my_pop.get_fittest().get_fitness() * 0.7 > FitnessCalc.get_avg_fitness():
                     generation_count += 1
                     fittest = my_pop.get_fittest()
-                    print(f"Generation: {generation_count} Fittest: {fittest.get_fitness()} Fittest Chromosome: {fittest}")
-                    print(f"FitnessCalc.get_avg_fitness(): {FitnessCalc.get_avg_fitness()}")
+                    # print(f"Generation: {generation_count} Fittest: {fittest.get_fitness()} Fittest Chromosome: {fittest}")
+                    # print(f"FitnessCalc.get_avg_fitness(): {FitnessCalc.get_avg_fitness()}")
                     my_pop = Algorithm.evolve_population(my_pop)
-                    # my_pop.print_population()
 
                 print("Solution found!")
                 print(f"Generation: {generation_count}")
@@ -370,265 +375,79 @@ class GA:
                 builder.append(GA.hold_gene_generator())
                 builder.append(GA.hold_gene_generator(True))
 
-                # Write the current iteration's output to the file
                 output_file.writelines(builder)
-                output_file.flush()  # Ensure the data is written to the file
+                output_file.flush()
 
         print(f"Output written to: {output_filename}")
 
 class FitnessCalcScenario:
-    """Class for calculating fitness in specific scenarios."""
-
-    buy_point: float = 0.0
-    sell_point: float = 0.0
-    gain: float = 0.0
-    total_gain: float = 0.0
-    money: float = 0.0
-    share_number: float = 0.0
-    money_temp: float = 0.0
-    maximum_money: float = 0.0
-    minimum_money: float = 0.0
-    maximum_gain: float = 0.0
-    maximum_lost: float = 0.0
-    total_percent_profit: float = 0.0
-    transaction_count: int = 0
-    sma50: float = 0.0
-    sma200: float = 0.0
-    trend: float = 0.0
-    force_sell: bool = False
-    success_transaction_count: int = 0
-    failed_transaction_count: int = 0
-
+    """Optimized scenario calculator using numpy operations."""
+    
     @staticmethod
-    def calculate_fitness(chromosome: Chromosome) -> int:
-        """
-        Calculate the fitness of a chromosome.
+    def calculate_fitness(chromosome: 'Chromosome') -> int:
+        """Optimized fitness calculation using numpy."""
+        # Load and cache data
+        data = FitnessCalc.load_data(str(PathConfig.OUTPUT_CSV))
+        if data.size == 0:
+            return 0
 
-        Args:
-            chromosome (Chromosome): The chromosome to evaluate.
-
-        Returns:
-            int: The fitness value.
-        """
-        FitnessCalcScenario.reset_scenario()
-        
-        fname = "resources2/output.csv"
-        data = FitnessCalcScenario.read_csv_file(fname)
-
+        # Rest of the method remains the same
+        money = 10000.0
         k = 0
+        
         while k < len(data) - 1:
-            FitnessCalcScenario.sma50 = float(data[k][21])
-            FitnessCalcScenario.sma200 = float(data[k][22])
+            sma50 = data[k, 21]
+            sma200 = data[k, 22]
+            trend = sma50 - sma200
             
-            FitnessCalcScenario.trend = FitnessCalcScenario.sma50 - FitnessCalcScenario.sma200
-            if FitnessCalcScenario.trend > 0:  # upTrend
-                k = FitnessCalcScenario.handle_up_trend(data, k, chromosome)
+            if trend > 0:  # upTrend
+                k, money = FitnessCalcScenario.handle_trend(
+                    data, k, chromosome, money, is_uptrend=True
+                )
             else:  # downTrend
-                k = FitnessCalcScenario.handle_down_trend(data, k, chromosome)
+                k, money = FitnessCalcScenario.handle_trend(
+                    data, k, chromosome, money, is_uptrend=False
+                )
             k += 1
 
-        return int(FitnessCalcScenario.money)
+        return int(money)
+
+    @staticmethod
+    def handle_trend(data: np.ndarray, k: int, chromosome: 'Chromosome', 
+                    money: float, is_uptrend: bool) -> tuple[int, float]:
+        """Unified trend handler with optimized calculations."""
+        offset = 4 if is_uptrend else 0
+        
+        # Check buy condition
+        if data[k, chromosome.get_gene(offset + 1)] <= chromosome.get_gene(offset):
+            buy_point = data[k, 0] * 100
+            share_number = (money - 1.0) / buy_point
+            force_sell = False
+            
+            # Process potential sell points
+            for j in range(k, len(data) - 1):
+                sell_point = data[j, 0] * 100
+                money_temp = (share_number * sell_point) - 1.0
+                
+                # Check stop loss
+                if money * 0.85 > money_temp:
+                    money = money_temp
+                    force_sell = True
+                
+                # Check sell condition
+                if (data[j, chromosome.get_gene(offset + 3)] >= 
+                    chromosome.get_gene(offset + 2) or force_sell):
+                    gain = sell_point - buy_point
+                    money = money_temp
+                    k = j
+                    break
+        
+        return k, money
 
     @staticmethod
     def reset_scenario() -> None:
-        """Reset the scenario variables."""
-        FitnessCalcScenario.buy_point = FitnessCalcScenario.sell_point = FitnessCalcScenario.gain = FitnessCalcScenario.total_gain = FitnessCalcScenario.share_number = FitnessCalcScenario.money_temp = FitnessCalcScenario.maximum_money = FitnessCalcScenario.maximum_gain = FitnessCalcScenario.total_percent_profit = 0.0
-        FitnessCalcScenario.money = 10000.0
-        FitnessCalcScenario.minimum_money = 10000.0
-        FitnessCalcScenario.maximum_lost = 100.0
-
-    @staticmethod
-    def read_csv_file(fname: str) -> List[List[str]]:
-        """
-        Read data from a CSV file.
-
-        Args:
-            fname (str): The name of the file to read.
-
-        Returns:
-            List[List[str]]: The data read from the file.
-        """
-        data = []
-        try:
-            with open(fname, 'r') as file:
-                csv_reader = csv.reader(file, delimiter=';')
-                for row in csv_reader:
-                    data.append(row)
-        except Exception as e:
-            print(f"An error occurred: {e}")
-        return data
-
-    @staticmethod
-    def handle_up_trend(data: List[List[str]], k: int, chromosome: Chromosome) -> int:
-        """
-        Handle the up trend scenario in the stock market simulation.
-
-        This method processes the data during an upward trend, making buy and sell decisions
-        based on the chromosome's genetic information and market conditions.
-
-        Mechanism:
-        1. Check if the buy condition is met using the chromosome's genes.
-        2. If buy condition is met:
-        a. Calculate the buy point and number of shares to purchase.
-        b. Iterate through subsequent data points to find a sell opportunity.
-        c. Update money and check for forced sell condition (15% loss).
-        d. Sell when either the target (from chromosome) is reached or forced sell is triggered.
-        3. If no buy occurs, the method simply returns the current index.
-
-        Args:
-            data (List[List[str]]): The historical market data, where each inner list represents
-                                    a day's data (price, indicators, etc.).
-            k (int): The current index in the data, representing the day being processed.
-            chromosome (Chromosome): The chromosome being evaluated, containing genetic
-                                    information that influences buy/sell decisions.
-
-        Returns:
-            int: The updated index after processing. If a transaction occurred, this will be
-                the index where the sell happened. Otherwise, it remains unchanged.
-
-        Side Effects:
-            - Updates various FitnessCalcScenario class variables like buy_point, sell_point,
-            share_number, money, force_sell, etc.
-            - Calls handle_sell method if a sell condition is met.
-
-        Note:
-            This method assumes an upward trend in the market. The buy and sell decisions
-            are heavily influenced by the genetic information in the chromosome, allowing
-            the genetic algorithm to optimize the trading strategy.
-        """
-        if float(data[k][chromosome.get_gene(5)]) <= float(chromosome.get_gene(4)):
-            FitnessCalcScenario.buy_point = float(data[k][0]) * 100
-            FitnessCalcScenario.share_number = (FitnessCalcScenario.money - 1.0) / FitnessCalcScenario.buy_point
-            FitnessCalcScenario.force_sell = False
-            for j in range(k, len(data) - 1):
-                FitnessCalcScenario.sell_point = float(data[j][0]) * 100
-                FitnessCalcScenario.money_temp = (FitnessCalcScenario.share_number * FitnessCalcScenario.sell_point) - 1.0
-                if FitnessCalcScenario.money * 0.85 > FitnessCalcScenario.money_temp:
-                    FitnessCalcScenario.money = FitnessCalcScenario.money_temp
-                    FitnessCalcScenario.force_sell = True
-
-                if float(data[j][chromosome.get_gene(7)]) >= float(chromosome.get_gene(6)) or FitnessCalcScenario.force_sell:
-                    FitnessCalcScenario.handle_sell(k, j)
-                    k = j
-                    break
-        return k
-
-    @staticmethod
-    def handle_down_trend(data: List[List[str]], k: int, chromosome: Chromosome) -> int:
-        """
-        Handle the down trend scenario in the stock market simulation.
-
-        This method processes the data during a downward trend, making buy and sell decisions
-        based on the chromosome's genetic information and market conditions. It implements a
-        strategy for potentially profiting from falling prices.
-
-        Mechanism:
-        1. Check if the buy condition is met using the chromosome's genes.
-        - In a down trend, this might represent identifying a potential bottom or reversal point.
-        2. If buy condition is met:
-        a. Calculate the buy point and number of shares to purchase.
-        b. Initialize force_sell flag to False.
-        c. Iterate through subsequent data points to find a sell opportunity:
-            - Update sell_point and calculate potential money after selling.
-            - Check for stop-loss condition (15% loss from purchase price).
-            - If stop-loss is triggered, update money and set force_sell to True.
-            - Check if sell condition (from chromosome) is met or if force_sell is True.
-        d. If sell condition is met, call handle_sell method and update the index.
-        3. If no buy occurs or after a sell, the method returns the current/updated index.
-
-        Args:
-            data (List[List[str]]): The historical market data, where each inner list represents
-                                    a day's data (price, indicators, etc.).
-            k (int): The current index in the data, representing the day being processed.
-            chromosome (Chromosome): The chromosome being evaluated, containing genetic
-                                    information that influences buy/sell decisions.
-
-        Returns:
-            int: The updated index after processing. If a transaction occurred, this will be
-                the index where the sell happened. Otherwise, it remains unchanged.
-
-        Side Effects:
-            - Updates various FitnessCalcScenario class variables including:
-            buy_point, sell_point, share_number, money, money_temp, and force_sell.
-            - Calls handle_sell method if a sell condition is met.
-
-        Note:
-            This method is specifically designed for downward market trends. The buy and sell
-            decisions are heavily influenced by the genetic information in the chromosome,
-            allowing the genetic algorithm to optimize the trading strategy for bearish markets.
-            The strategy implemented here might involve techniques like short selling or
-            identifying potential reversal points in a downtrend.
-        """
-        if float(data[k][chromosome.get_gene(1)]) <= float(chromosome.get_gene(0)):
-            FitnessCalcScenario.buy_point = float(data[k][0]) * 100
-            FitnessCalcScenario.share_number = (FitnessCalcScenario.money - 1.0) / FitnessCalcScenario.buy_point
-            FitnessCalcScenario.force_sell = False
-            for j in range(k, len(data) - 1):
-                FitnessCalcScenario.sell_point = float(data[j][0]) * 100
-                FitnessCalcScenario.money_temp = (FitnessCalcScenario.share_number * FitnessCalcScenario.sell_point) - 1.0
-                if FitnessCalcScenario.money * 0.85 > FitnessCalcScenario.money_temp:
-                    FitnessCalcScenario.money = FitnessCalcScenario.money_temp
-                    FitnessCalcScenario.force_sell = True
-
-                if float(data[j][chromosome.get_gene(3)]) >= float(chromosome.get_gene(2)):
-                    FitnessCalcScenario.handle_sell(k, j)
-                    k = j
-                    break
-        return k
-
-    @staticmethod
-    def handle_sell(k: int, j: int) -> None:
-        """
-        Handle the sell scenario in the stock market simulation.
-
-        This method processes the sale of stocks, updates the financial metrics,
-        and records the transaction details. It's called when a sell condition is met,
-        either due to reaching a target price or triggering a stop-loss.
-
-        Mechanism:
-        1. Calculate the gain (or loss) from the transaction:
-        - Gain = sell_point - buy_point
-        2. Calculate the new money balance after the sale:
-        - money_temp = (share_number * sell_point) - transaction_fee
-        3. Update the current money with the new balance.
-        4. Update maximum and minimum money reached during the simulation.
-        5. Increment the transaction count.
-        6. Add to the total percent profit:
-        - total_percent_profit += (gain / buy_point)
-        7. Add to the total gain.
-
-        Args:
-            k (int): The buy index in the data array, representing when the purchase was made.
-            j (int): The sell index in the data array, representing when the sale is executed.
-
-        Returns:
-            None
-
-        Side Effects:
-            Updates several class variables of FitnessCalcScenario:
-            - gain: The profit or loss from this specific transaction.
-            - money: The current balance after the sale.
-            - maximum_money: The highest balance achieved so far.
-            - minimum_money: The lowest balance reached so far.
-            - transaction_count: Total number of buy-sell transactions.
-            - total_percent_profit: Cumulative percentage profit from all transactions.
-            - total_gain: Cumulative absolute profit from all transactions.
-
-        Note:
-            - This method assumes that buy_point, sell_point, and share_number have been
-            set correctly before it's called.
-            - A transaction fee of 1.0 is subtracted from the sale proceeds (the '- 1.0' in money_temp calculation).
-            - This method is crucial for tracking the performance of the trading strategy
-            and ultimately determines the fitness of the chromosome in the genetic algorithm.
-        """
-        FitnessCalcScenario.gain = FitnessCalcScenario.sell_point - FitnessCalcScenario.buy_point
-        FitnessCalcScenario.money_temp = (FitnessCalcScenario.share_number * FitnessCalcScenario.sell_point) - 1.0
-        FitnessCalcScenario.money = FitnessCalcScenario.money_temp
-        FitnessCalcScenario.maximum_money = max(FitnessCalcScenario.maximum_money, FitnessCalcScenario.money)
-        FitnessCalcScenario.minimum_money = min(FitnessCalcScenario.minimum_money, FitnessCalcScenario.money)
-        FitnessCalcScenario.transaction_count += 1
-        FitnessCalcScenario.total_percent_profit += (FitnessCalcScenario.gain / FitnessCalcScenario.buy_point)
-        FitnessCalcScenario.total_gain += FitnessCalcScenario.gain
+        """No longer needed as we're not using class variables."""
+        pass
 
 if __name__ == "__main__":
     GA.main()

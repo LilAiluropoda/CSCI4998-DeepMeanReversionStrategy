@@ -2,25 +2,8 @@ import pandas as pd
 from typing import List
 import numpy as np
 from pathlib import Path
-from dataclasses import dataclass
-import os
-from dotenv import load_dotenv
+from app.utils.path_config import PathConfig
 
-# Load environment variables
-load_dotenv()
-
-@dataclass
-class PathConfig:
-    """Centralized path configuration"""
-    BASE_DIR: Path = Path(os.getenv('BASE_DIR', 'C:/Users/Steve/Desktop/Projects/fyp'))
-    DATA_DIR: Path = BASE_DIR / 'app' / 'data' / 'stock_data'
-    
-    @classmethod
-    def get_data_file_path(cls, filename: str) -> Path:
-        """Get full path for a data file"""
-        return cls.DATA_DIR / filename
-
-# Rest of the code remains the same, just update path references
 class DataLoader:
     """
     Handles all data loading, processing, and output operations for financial data.
@@ -92,13 +75,23 @@ class TestDataGenerator:
         self.data: pd.DataFrame = pd.DataFrame()
         
     def process(self) -> None:
+        """Process data and generate test file."""
         self._read_input_file()
         testing_data = self._convert_to_testing_format()
         self._write_output_file(testing_data)
         
+    def process_training(self, company: str) -> None:
+        """Process data and generate training file."""
+        self.input_path = PathConfig.get_data_file_path(f"{company}19972007.csv")
+        self._read_input_file()
+        training_data = self._convert_to_testing_format()
+        self._write_output_file(training_data)
+        
     def _read_input_file(self) -> None:
         try:
+            print(f"Reading from: {self.input_path}")
             self.data = pd.read_csv(self.input_path, sep=';', header=None)
+            print(f"Data shape: {self.data.shape}")
         except IOError as e:
             print(f"Error reading input file: {e}")
             self.data = pd.DataFrame()
@@ -123,17 +116,133 @@ class TestDataGenerator:
         return formatted_data
     
     def _get_trend_from_sma(self, row: pd.Series) -> str:
-        sma50 = float(row[21])
-        sma200 = float(row[22])
-        return "1.0" if sma50 - sma200 > 0 else "0.0"
+        try:
+            sma50 = float(row[21])
+            sma200 = float(row[22])
+            return "1.0" if sma50 - sma200 > 0 else "0.0"
+        except Exception as e:
+            print(f"Error calculating trend: {e}")
+            return "0.0"
     
     def _write_output_file(self, data: List[str]) -> None:
         try:
+            print(f"Writing to: {self.output_path}")
             with open(self.output_path, "w") as writer:
                 writer.writelines(data)
+            print(f"Written {len(data)} lines")
         except IOError as e:
             print(f"Error writing output file: {e}")
 
+class TrainTestSplitter:
+    """
+    Splits historical stock data into training and testing datasets based on specified time periods.
+    Works with raw data without scaling.
+    """
+    
+    def split_data(self, 
+                   company_ticker: str,
+                   start_year: int,
+                   train_years: int,
+                   test_years: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Split the raw data into training and testing sets based on specified timeframes.
+        
+        Args:
+            company_ticker (str): Stock ticker symbol
+            start_year (int): Year to start the split from
+            train_years (int): Number of years for training data
+            test_years (int): Number of years for testing data
+            
+        Returns:
+            tuple[pd.DataFrame, pd.DataFrame]: Training and testing DataFrames
+        """
+        # Load the raw dataset
+        full_data_path = f"{company_ticker}19972017.csv"
+        
+        try:
+            # Read raw data without scaling, specifying data types
+            df = pd.read_csv(
+                PathConfig.get_data_file_path(full_data_path),
+                header=None,
+                names=['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Adj Close'],
+                dtype={
+                    'Open': float,
+                    'High': float,
+                    'Low': float,
+                    'Close': float,
+                    'Volume': float,
+                    'Adj Close': float
+                },
+                parse_dates=['Date'],
+                date_parser=lambda x: pd.to_datetime(x, format='%Y-%m-%d')
+            )
+            
+            # Reverse the order if needed (assuming newer dates should be at the bottom)
+            df = df.iloc[::-1].reset_index(drop=True)
+            
+            # Calculate period boundaries
+            train_start = pd.Timestamp(f"{start_year}-01-01")
+            train_end = pd.Timestamp(f"{start_year + train_years}-12-31")
+            test_start = pd.Timestamp(f"{start_year + train_years}-01-01")
+            test_end = pd.Timestamp(f"{start_year + train_years + test_years}-12-31")
+            
+            # Split the data
+            train_data = df[(df['Date'] >= train_start) & (df['Date'] <= train_end)]
+            test_data = df[(df['Date'] >= test_start) & (df['Date'] <= test_end)]
+            
+            return train_data, test_data
+            
+        except Exception as e:
+            print(f"Error loading or splitting data: {e}")
+            raise
+    
+    def save_split_data(self,
+                       company_ticker: str,
+                       start_year: int,
+                       train_years: int,
+                       test_years: int) -> None:
+        """
+        Split and save the raw data into separate training and testing CSV files.
+        
+        Args:
+            company_ticker (str): Stock ticker symbol
+            start_year (int): Year to start the split from
+            train_years (int): Number of years for training data
+            test_years (int): Number of years for testing data
+        """
+        try:
+            train_data, test_data = self.split_data(
+                company_ticker,
+                start_year,
+                train_years,
+                test_years
+            )
+            
+            # Save the split datasets
+            train_file = f"{company_ticker}_train.csv"
+            test_file = f"{company_ticker}_test.csv"
+            
+            # Save without index, keeping the same format as input
+            train_data.to_csv(
+                PathConfig.get_data_file_path(train_file), 
+                index=False, 
+                header=False,
+                date_format='%Y-%m-%d'
+            )
+            test_data.to_csv(
+                PathConfig.get_data_file_path(test_file), 
+                index=False, 
+                header=False,
+                date_format='%Y-%m-%d'
+            )
+            
+            print(f"Successfully split data for {company_ticker}:")
+            print(f"Training data ({train_data.shape[0]} rows): {train_file}")
+            print(f"Testing data ({test_data.shape[0]} rows): {test_file}")
+            
+        except Exception as e:
+            print(f"Error splitting data for {company_ticker}: {e}")
+            
 if __name__ == "__main__":
     loader = DataLoader()
     
