@@ -18,7 +18,7 @@ class Algorithm:
     ELITISM: bool = False
 
     @staticmethod
-    def evolve_population(pop: 'Population') -> 'Population':
+    def evolve_population(pop: "Population") -> "Population":
         """
         Evolve a population.
 
@@ -48,7 +48,7 @@ class Algorithm:
         return new_population
 
     @staticmethod
-    def crossover(indiv1: 'Chromosome', indiv2: 'Chromosome') -> 'Chromosome':
+    def crossover(indiv1: "Chromosome", indiv2: "Chromosome") -> "Chromosome":
         """
         Perform crossover between two chromosomes.
 
@@ -68,7 +68,7 @@ class Algorithm:
         return new_sol
 
     @staticmethod
-    def mutate(indiv: 'Chromosome') -> None:
+    def mutate(indiv: "Chromosome") -> None:
         """
         Mutate a chromosome.
 
@@ -81,7 +81,7 @@ class Algorithm:
                 indiv.set_gene(i, gene)
 
     @staticmethod
-    def tournament_selection(pop: 'Population') -> 'Chromosome':
+    def tournament_selection(pop: "Population") -> "Chromosome":
         """
         Perform tournament selection.
 
@@ -96,6 +96,7 @@ class Algorithm:
             random_id = int(random.random() * pop.size())
             tournament.save_chromosome(i, pop.get_chromosome(random_id))
         return tournament.get_fittest()
+
 
 class Chromosome:
     """Class representing a chromosome in the genetic algorithm."""
@@ -183,6 +184,7 @@ class Chromosome:
     def to_print(self) -> str:
         return f"{self} : {self.fitness}"
 
+
 class FitnessCalc:
     """Optimized class for calculating fitness."""
 
@@ -198,9 +200,7 @@ class FitnessCalc:
         if FitnessCalc._cached_data is None:
             try:
                 FitnessCalc._cached_data = np.genfromtxt(
-                    fname, 
-                    delimiter=';',
-                    dtype=float
+                    fname, delimiter=";", dtype=float
                 )
             except Exception as e:
                 print(f"Error loading data: {e}")
@@ -208,21 +208,23 @@ class FitnessCalc:
         return FitnessCalc._cached_data
 
     @staticmethod
-    def parallel_fitness_calc(chromosomes: List['Chromosome'], chunk_size: int = 50) -> List[int]:
+    def parallel_fitness_calc(
+        chromosomes: List["Chromosome"], chunk_size: int = 50
+    ) -> List[int]:
         """Calculate fitness for multiple chromosomes in parallel."""
         with Pool(processes=cpu_count() - 1) as pool:
-            fitnesses = pool.map(FitnessCalcScenario.calculate_fitness, 
-                               chromosomes, 
-                               chunk_size)
-            
+            fitnesses = pool.map(
+                FitnessCalcScenario.calculate_fitness, chromosomes, chunk_size
+            )
+
             # Update fitness statistics
             FitnessCalc.fitness_total = sum(fitnesses)
             FitnessCalc.max_fitness = max(FitnessCalc.max_fitness, max(fitnesses))
-            
+
             return fitnesses
 
     @staticmethod
-    def get_fitness_calc(chromosome: 'Chromosome') -> int:
+    def get_fitness_calc(chromosome: "Chromosome") -> int:
         """Calculate fitness for a single chromosome."""
         fitness = FitnessCalcScenario.calculate_fitness(chromosome)
         FitnessCalc.fitness_total += fitness
@@ -252,6 +254,7 @@ class FitnessCalc:
         """Clear the cached data."""
         FitnessCalc._cached_data = None
         FitnessCalc.load_data.cache_clear()
+
 
 class Population:
     """Class representing a population of chromosomes."""
@@ -291,7 +294,11 @@ class Population:
         """
         fittest = self.chromosomes[0]
         for chromosome in self.chromosomes:
-            if chromosome and fittest and fittest.get_fitness() <= chromosome.get_fitness():
+            if (
+                chromosome
+                and fittest
+                and fittest.get_fitness() <= chromosome.get_fitness()
+            ):
                 fittest = chromosome
         return fittest
 
@@ -313,6 +320,7 @@ class Population:
             indiv (Chromosome): The chromosome to save.
         """
         self.chromosomes[index] = indiv
+
 
 class GA:
     """Class for running the Genetic Algorithm."""
@@ -336,7 +344,10 @@ class GA:
 
         index = 1
         while True:
-            new_filename = base_filename.parent / f"{base_filename.stem}({index}){base_filename.suffix}"
+            new_filename = (
+                base_filename.parent
+                / f"{base_filename.stem}({index}){base_filename.suffix}"
+            )
             if not new_filename.exists():
                 return new_filename
             index += 1
@@ -346,9 +357,9 @@ class GA:
         """Main method to run the Genetic Algorithm."""
         output_filename = GA.get_unique_filename(PathConfig.GA_TRAINING_LIST)
         GA.counter = 0  # reset GA counter
-        
+
         with open(output_filename, "w") as output_file:
-            while GA.counter < 50:
+            while GA.counter < 5:
                 GA.counter += 1
                 my_pop = Population(GA.population_count, True)
 
@@ -357,7 +368,10 @@ class GA:
 
                 builder: List[str] = []
 
-                while my_pop.get_fittest().get_fitness() * 0.7 > FitnessCalc.get_avg_fitness():
+                while (
+                    my_pop.get_fittest().get_fitness() * 0.7
+                    > FitnessCalc.get_avg_fitness()
+                ):
                     generation_count += 1
                     fittest = my_pop.get_fittest()
                     # print(f"Generation: {generation_count} Fittest: {fittest.get_fitness()} Fittest Chromosome: {fittest}")
@@ -380,11 +394,12 @@ class GA:
 
         print(f"Output written to: {output_filename}")
 
+
 class FitnessCalcScenario:
     """Optimized scenario calculator using numpy operations."""
-    
+
     @staticmethod
-    def calculate_fitness(chromosome: 'Chromosome') -> int:
+    def calculate_fitness(chromosome: "Chromosome") -> int:
         """Optimized fitness calculation using numpy."""
         # Load and cache data
         data = FitnessCalc.load_data(str(PathConfig.OUTPUT_CSV))
@@ -394,12 +409,12 @@ class FitnessCalcScenario:
         # Rest of the method remains the same
         money = 10000.0
         k = 0
-        
+
         while k < len(data) - 1:
             sma50 = data[k, 21]
             sma200 = data[k, 22]
             trend = sma50 - sma200
-            
+
             if trend > 0:  # upTrend
                 k, money = FitnessCalcScenario.handle_trend(
                     data, k, chromosome, money, is_uptrend=True
@@ -413,41 +428,50 @@ class FitnessCalcScenario:
         return int(money)
 
     @staticmethod
-    def handle_trend(data: np.ndarray, k: int, chromosome: 'Chromosome', 
-                    money: float, is_uptrend: bool) -> tuple[int, float]:
+    def handle_trend(
+        data: np.ndarray,
+        k: int,
+        chromosome: "Chromosome",
+        money: float,
+        is_uptrend: bool,
+    ) -> tuple[int, float]:
         """Unified trend handler with optimized calculations."""
         offset = 4 if is_uptrend else 0
-        
+
         # Check buy condition
         if data[k, chromosome.get_gene(offset + 1)] <= chromosome.get_gene(offset):
             buy_point = data[k, 0] * 100
             share_number = (money - 1.0) / buy_point
             force_sell = False
-            
+
             # Process potential sell points
             for j in range(k, len(data) - 1):
                 sell_point = data[j, 0] * 100
                 money_temp = (share_number * sell_point) - 1.0
-                
+
                 # Check stop loss
                 if money * 0.85 > money_temp:
                     money = money_temp
                     force_sell = True
-                
+
                 # Check sell condition
-                if (data[j, chromosome.get_gene(offset + 3)] >= 
-                    chromosome.get_gene(offset + 2) or force_sell):
+                if (
+                    data[j, chromosome.get_gene(offset + 3)]
+                    >= chromosome.get_gene(offset + 2)
+                    or force_sell
+                ):
                     gain = sell_point - buy_point
                     money = money_temp
                     k = j
                     break
-        
+
         return k, money
 
     @staticmethod
     def reset_scenario() -> None:
         """No longer needed as we're not using class variables."""
         pass
+
 
 if __name__ == "__main__":
     GA.main()
