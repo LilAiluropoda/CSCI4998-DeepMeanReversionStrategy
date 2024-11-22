@@ -208,7 +208,7 @@ class TradingSystem:
             self.results_manager.save_results(metrics)
             
             # Generate visualization (commented out as in original)
-            # self.visualizer.visualize_trading_decisions(data, self.company)
+            self.visualizer.visualize_trading_decisions(data, self.company)
             
             print(f"\nAnalysis completed for {self.company} - Year {self.year}")
             
