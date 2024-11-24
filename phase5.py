@@ -7,6 +7,7 @@ from typing import List, Tuple, Dict, Any
 from dataclasses import dataclass
 from tabulate import tabulate
 from phase1 import SMAIndicator
+from matplotlib.patches import Patch
 
 @dataclass
 class TransactionStats:
@@ -22,6 +23,136 @@ class TransactionStats:
     maximum_lost: float = 100.0
     total_gain: float = 0.0
     total_transaction_length: int = 0
+
+class online_dc_calculator():
+    def __init__(self, threshold: float = 0.1):
+        # Data storage
+        self.prices = []
+        self.time = []
+        self.TMV_list = []
+        self.T_list = []
+        self.colors = []
+        self.events = []
+        
+        # State variables
+        self.threshold = threshold
+        self.ext_point_n = None
+        self.curr_event_max = None
+        self.curr_event_min = None
+        self.time_point_max = 0
+        self.time_point_min = 0
+        self.trend_status = 'up'
+        self.T = 0
+        self.current_index = 0
+
+    def update_point(self, new_price, timestamp=None):
+        """
+        Process a single new price point and update DC states
+        Returns: current event type
+        """
+        # Initialize if first point
+        if self.ext_point_n is None:
+            self.ext_point_n = new_price
+            self.curr_event_max = new_price
+            self.curr_event_min = new_price
+            
+        # Store price and time
+        self.prices.append(new_price)
+        if timestamp is None:
+            timestamp = self.current_index
+        self.time.append(timestamp)
+        
+        # Calculate TMV
+        TMV = (new_price - self.ext_point_n) / (self.ext_point_n * self.threshold)
+        self.TMV_list.append(TMV)
+        self.T_list.append(self.T)
+        self.T += 1
+
+        current_event = None
+        
+        if self.trend_status == 'up':
+            self.colors.append('lime')
+            self.events.append('Upward Overshoot')
+            current_event = 'Upward Overshoot'
+
+            if new_price < ((1 - self.threshold) * self.curr_event_max):
+                self.trend_status = 'down'
+                self.curr_event_min = new_price
+                self.ext_point_n = self.curr_event_max
+                self.T = self.current_index - self.time_point_max
+
+                # Update previous events in current trend
+                num_points_change = self.current_index - self.time_point_max
+                for j in range(1, num_points_change + 1):
+                    self.colors[-j] = 'red'
+                    self.events[-j] = 'Downward DCC'
+                current_event = 'Downward DCC'
+            else:
+                if new_price > self.curr_event_max:
+                    self.curr_event_max = new_price
+                    self.time_point_max = self.current_index
+        else:
+            self.colors.append('lightcoral')
+            self.events.append('Downward Overshoot')
+            current_event = 'Downward Overshoot'
+
+            if new_price > ((1 + self.threshold) * self.curr_event_min):
+                self.trend_status = 'up'
+                self.curr_event_max = new_price
+                self.ext_point_n = self.curr_event_min            
+                self.T = self.current_index - self.time_point_min
+
+                # Update previous events in current trend
+                num_points_change = self.current_index - self.time_point_min
+                for j in range(1, num_points_change + 1):
+                    self.colors[-j] = 'green'
+                    self.events[-j] = 'Upward DCC'
+                current_event = 'Upward DCC'
+            else:
+                if new_price < self.curr_event_min:
+                    self.curr_event_min = new_price
+                    self.time_point_min = self.current_index
+
+        self.current_index += 1
+        return current_event
+
+    def compute_dc_variables(self, prices=None):
+        """
+        Batch computation of DC variables for a series of prices
+        """
+        if prices is not None:
+            # Reset state for new computation
+            self.__init__(self.threshold)
+            self.prices = prices
+            
+        if not self.prices:
+            print('Please load the time series data first')
+            return
+            
+        for price in self.prices:
+            self.update_point(price)
+            
+        self.colors = np.array(self.colors)
+        print('DC variables computation has finished.')
+
+    def get_current_state(self):
+        """
+        Return current state information
+        """
+        return {
+            'trend_status': self.trend_status,
+            'current_event': self.events[-1] if self.events else None,
+            'TMV': self.TMV_list[-1] if self.TMV_list else None,
+            'T': self.T,
+            'current_price': self.prices[-1] if self.prices else None,
+            'ext_point': self.ext_point_n
+        }
+
+    def reset(self):
+        """
+        Reset the calculator state
+        """
+        self.__init__(self.threshold)
 
 class DataLoader:
     """Handles data loading and preprocessing operations."""
@@ -77,14 +208,25 @@ class Backtester:
         return stats
 
     @staticmethod
-    def process_transactions(data: pd.DataFrame, company: str) -> TransactionStats:
-        stats: TransactionStats = TransactionStats()
-        k: int = 0
-        while k < len(data) - 1:
-            if data.loc[k, 'signal'] == 1.0:
-                k, stats = Backtester.process_transaction(data, k, stats)
+    def process_transactions(data: pd.DataFrame) -> TransactionStats:
+        """
+        Process transactions based on DC trends and signals.
+        
+        Args:
+            data: DataFrame containing price and signal data
+        
+        Returns:
+            TransactionStats: Statistics of processed transactions
+        """
+        # Process final statistics
+        stats = TransactionStats()
+        i = 0
+        while i < len(data) - 1:
+            if data.loc[i, 'signal'] == 1.0:
+                i, stats = Backtester.process_transaction(data, i, stats)
             else:
-                k += 1
+                i += 1
+                
         return stats
 
     @staticmethod
@@ -197,11 +339,37 @@ class Visualizer:
         sma_50_values = [sma_50.calculate(i) for i in range(len(prices))]
         sma_200_values = [sma_200.calculate(i) for i in range(len(prices))]
 
+        # Calculate State
+        dc_calculator = online_dc_calculator()
+        states = [dc_calculator.update_point(prices[i], i) for i in range(len(prices))]
+
+        # Define colors for different states
+        state_colors = {
+            'Upward DCC': '#006400',      # Dark green
+            'Upward Overshoot': '#90EE90', # Light green
+            'Downward DCC': '#8B0000',     # Dark red
+            'Downward Overshoot': '#FFB6C1' # Light red
+        }
+
+        # Highlight state regions
+        current_state = states[0]
+        state_start = 0
+        
+        for i in range(1, len(states)):
+            if states[i] != current_state or i == len(states) - 1:
+                # Fill the region with appropriate color
+                if current_state in state_colors:
+                    ax1.axvspan(state_start, i, 
+                            color=state_colors[current_state], 
+                            alpha=0.2)
+                current_state = states[i]
+                state_start = i
+
         # Plot price and SMAs on main chart (ax1)
         ax1.plot(dates, prices, color='gray', alpha=0.6, label='Price')
         ax1.plot(dates, sma_50_values, color='blue', alpha=0.5, label='50-day SMA', linewidth=2)
         ax1.plot(dates, sma_200_values, color='red', alpha=0.5, label='200-day SMA', linewidth=2)
-        
+
         # Initialize cumulative returns array
         cumulative_returns = np.zeros(len(data))
         
@@ -314,7 +482,15 @@ class Visualizer:
         ax1.grid(True, alpha=0.3)
         ax2.grid(True, alpha=0.3)
         ax2.set_xlabel('Trading Days')
-        
+
+        # Add legend for states
+        state_legend_elements = [
+            Patch(facecolor=color, alpha=0.2, label=state)
+            for state, color in state_colors.items()
+        ]
+        ax1.legend(handles=state_legend_elements + ax1.get_legend_handles_labels()[0],
+                loc='upper left', bbox_to_anchor=(1, 1))
+
         # Save plot
         plt.tight_layout()
         plt.savefig(f'resources2/trading_decisions_{company}.png', bbox_inches='tight', dpi=300)
@@ -338,7 +514,43 @@ class TradingSystem:
             data = self.data_loader.read_csv_file(fname)
             
             # Perform backtesting
-            stats = self.backtester.process_transactions(data, self.company)
+            # Create a copy of the DataFrame to avoid modifying the original
+            processed_data = data.copy()
+            
+            active_position = False
+            current_trend = None  # None initially, will be set to 'up' or 'down'
+
+            dc_tracker = online_dc_calculator()
+            
+            for i in range(len(processed_data)):
+                state = dc_tracker.update_point(processed_data.loc[i, 'price'], i)
+                
+                # Update trend based on DC state
+                if state == 'Upward DCC':
+                    current_trend = 'up'
+                elif state == 'Downward DCC':
+                    current_trend = 'down'
+                    
+                # Get current signal
+                current_signal = processed_data.loc[i, 'signal']
+                
+                # Process signals based on trend
+                if current_trend == 'up':
+                    if current_signal == 1.0:  # Buy signal
+                        active_position = True
+                    if current_signal == 2.0:  # Sell signal
+                        if active_position == False:
+                            processed_data.loc[i, 'signal'] = 0.0  # Cancel the trade
+                        else:
+                            active_position = False
+                elif current_trend == 'down':
+                    if active_position:
+                        processed_data.loc[i, 'signal'] = 2.0  # Close position
+                        active_position = False
+                    else:
+                        processed_data.loc[i, 'signal'] = 0.0  # No trading in downtrend
+
+            stats = self.backtester.process_transactions(data)
             money_bah = self.backtester.calculate_bah(data)
             
             # Generate and display results
@@ -349,7 +561,7 @@ class TradingSystem:
             self.report_generator.save_results(metrics)
             
             # Visualize trading decisions
-            self.visualizer.visualize_trading_decisions(data, self.company)
+            self.visualizer.visualize_trading_decisions(processed_data, self.company)
             
             print(f"\nAnalysis completed successfully for {self.company}")
             print("Results have been saved to 'resources2/Results.txt'")
